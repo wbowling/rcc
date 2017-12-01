@@ -3,13 +3,13 @@ use std::vec::IntoIter;
 
 #[derive(Debug)]
 pub struct Program {
-    func: Function
+    pub func: Function
 }
 
 #[derive(Debug)]
 pub struct Function {
-    name: String,
-    statement: Statement
+    pub name: String,
+    pub statement: Statement
 }
 
 #[derive(Debug)]
