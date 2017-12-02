@@ -19,7 +19,7 @@ pub enum Statement {
 
 #[derive(Debug)]
 pub enum Expression {
-    Int(u32)
+    Int(i32)
 }
 
 pub fn parse_program(tokens: &mut IntoIter<Token>) -> Program {
@@ -87,6 +87,11 @@ fn parse_statement(tokens: &mut IntoIter<Token>) -> Statement {
 
 fn parse_expression(tokens: &mut IntoIter<Token>) -> Expression {
     let lit = match tokens.next() {
+        Some(Token::Operation(op)) if op == '-' => {
+            match parse_expression(tokens) {
+                Expression::Int(v) => Ok(Expression::Int(-v))
+            }
+        },
         Some(Token::Literal(word)) => Ok(Expression::Int(word)),
         _ => Err("Expected int literal")
     };

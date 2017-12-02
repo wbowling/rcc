@@ -2,4 +2,6 @@
 **/*.rs.bk
 .idea
 !/stage_1/**/*.*
+/testcases/*
+!/testcases/*.*
 *.s

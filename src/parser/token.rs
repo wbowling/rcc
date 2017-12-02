@@ -12,8 +12,8 @@ pub enum Token {
     SemiColon,
     Keyword(String),
     Identifier(String),
-    Literal(u32),
-    Unknown
+    Literal(i32),
+    Operation(char)
 }
 
 pub fn lex(contents: String) -> Vec<Token> {
@@ -56,12 +56,15 @@ pub fn lex(contents: String) -> Vec<Token> {
                     },
                     '0'...'9' => {
                         let word = it.take_while_ref(|x| x.is_ascii() && x.is_digit(10)).collect::<String>();
-                        let int: u32 = word.parse().expect("Not a number");
+                        let int: i32 = word.parse().expect("Not a number");
                         tokens.push(Token::Literal(int))
                     },
-                    _ => {
+                    op @ '-' | op @ '+' => {
                         it.next();
-                        tokens.push(Token::Unknown);
+                        tokens.push(Token::Operation(op));
+                    }
+                    other => {
+                        panic!("Unknown token {:?}", other)
                     }
                 };
             },

@@ -13,8 +13,10 @@ fn main() {
 
     let contents = read_file(path);
     let tokens = parser::token::lex(contents);
+    println!("{:?}", tokens);
+
     let prog = parser::ast::parse_program(&mut tokens.into_iter());
-//    println!("{:?}", prog);
+    println!("{:?}", prog);
 
     let asm = parser::generate::generate(prog);
 
