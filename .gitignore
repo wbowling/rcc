@@ -1,7 +1,7 @@
 /target/
 **/*.rs.bk
 .idea
-!/stage_1/**/*.*
+!/stage_*/**/*.*
 /testcases/*
 !/testcases/*.*
 *.s

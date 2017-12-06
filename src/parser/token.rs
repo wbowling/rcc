@@ -4,9 +4,10 @@ use std::ascii::AsciiExt;
 
 
 #[derive(Debug)]
-pub enum Op {
-    Add,
-    Sub,
+pub enum UnOp {
+    Negation,
+    BitComp,
+    LogicalNeg
 }
 
 #[derive(Debug)]
@@ -19,7 +20,7 @@ pub enum Token {
     Keyword(String),
     Identifier(String),
     Literal(i32),
-    Operation(Op),
+    Operation(UnOp),
 }
 
 pub fn lex(contents: String) -> Vec<Token> {
@@ -67,11 +68,15 @@ pub fn lex(contents: String) -> Vec<Token> {
                     },
                     '-' => {
                         it.next();
-                        tokens.push(Token::Operation(Op::Sub));
+                        tokens.push(Token::Operation(UnOp::Negation));
                     },
-                    '+' => {
+                    '!' => {
                         it.next();
-                        tokens.push(Token::Operation(Op::Add));
+                        tokens.push(Token::Operation(UnOp::LogicalNeg));
+                    },
+                    '~' => {
+                        it.next();
+                        tokens.push(Token::Operation(UnOp::BitComp));
                     }
                     other => {
                         panic!("Unknown token {:?}", other)

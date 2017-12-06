@@ -1,5 +1,5 @@
 use super::ast::*;
-use super::token::Op;
+use super::token::UnOp;
 
 pub fn generate(prog: Program) -> String {
     match prog {
@@ -9,24 +9,26 @@ pub fn generate(prog: Program) -> String {
 
 fn gen_function(fun: Function) -> String {
     match fun {
-        Function { name, statement } => format!(".global _{0}\n_{0}:\n{1}\n", name, gen_statement(statement)),
+        Function { name, statement } => format!(".global _{0}\n_{0}:\n{1}", name, gen_statement(statement)),
     }
 }
 
 fn gen_statement(stat: Statement) -> String {
     match stat {
-        Statement::Return(exp) => format!("xor %eax, %eax\n{}\nret\n", gen_expression(exp, None))
+        Statement::Return(exp) => format!("{}ret\n", gen_expression(exp)),
     }
 }
 
-fn gen_expression(exp: Expression, op: Option<Op>) -> String {
+fn gen_expression(exp: Expression) -> String {
     match exp {
-        Expression::Int(val) => {
-            match op {
-                None | Some(Op::Add) => format!("add ${}, %eax", val),
-                Some(Op::Sub) => format!("sub ${}, %eax", val),
-            }
+        Expression::Int(val) => format!("movl ${}, %eax\n", val),
+        Expression::UnOp(op, exp) => {
+            let asm = match op {
+                UnOp::Negation => "neg %eax\n",
+                UnOp::BitComp => "not %eax\n",
+                UnOp::LogicalNeg => "cmpl $0, %eax\nmovl $0, %eax\nsete %al\n",
+            };
+            format!("{}{}", gen_expression(*exp), asm)
         },
-        Expression::Expr(x, next_op, y) => format!("{}\n{}", gen_expression(*x, op), gen_expression(*y, Some(next_op))),
     }
 }
