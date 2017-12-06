@@ -1,4 +1,5 @@
 use super::token::Token;
+use super::token::Op;
 use std::vec::IntoIter;
 use std::iter::Peekable;
 
@@ -21,7 +22,8 @@ pub enum Statement {
 
 #[derive(Debug)]
 pub enum Expression {
-    Int(i32)
+    Int(i32),
+    Expr(Box<Expression>, Op, Box<Expression>),
 }
 
 pub fn parse_program(tokens: &mut Peekable<IntoIter<Token>>) -> Program {
@@ -92,15 +94,39 @@ fn parse_statement(tokens: &mut Peekable<IntoIter<Token>>) -> Statement {
 }
 
 fn parse_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
-    let lit = match tokens.next() {
-        Some(Token::Operation(op)) if op == '-' => {
-            match parse_expression(tokens) {
-                Expression::Int(v) => Ok(Expression::Int(-v))
-            }
-        },
-        Some(Token::Operation(op)) if op == '+' => Ok(parse_expression(tokens)),
-        Some(Token::Literal(word)) => Ok(Expression::Int(word)),
+    let num1 = match tokens.next() {
+        Some(Token::Literal(x)) => Ok(Expression::Int(x)),
         other => Err(format!("Expected int literal, found {:?}", other))
+    }.expect("Failed to parse");
+
+    let res = match tokens.peek() {
+        Some(&Token::SemiColon) => Ok(num1),
+        _ => {
+            match tokens.next() {
+                Some(Token::Operation(op)) => {
+                    match op {
+                        op => Ok(Expression::Expr(Box::new(num1), op, Box::new(parse_expression(tokens)))),
+                    }
+                },
+                op => Err(format!("Expected op found {:?}", op))
+            }
+        }
     };
-    lit.expect("Failed to parse")
+
+    res.expect("Failed to parse")
 }
+
+//fn parse_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
+//    let lit = match tokens.next() {
+//        Some(Token::Operation(Op::Sub)) => {
+//            match parse_expression(tokens) {
+//                Expression::Int(v) => Ok(Expression::Int(-v)),
+//                Expression::Add(x,y) => Ok(Expression::Add(-x, y))
+//            }
+//        },
+//        Some(Token::Operation(Op::Add)) => Ok(parse_expression(tokens)),
+//        Some(Token::Literal(x)) => Ok(Expression::Int(x)),
+//        other => Err(format!("Expected int literal, found {:?}", other))
+//    };
+//    let exp = lit.expect("Failed to parse");
+//}

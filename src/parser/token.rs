@@ -4,6 +4,12 @@ use std::ascii::AsciiExt;
 
 
 #[derive(Debug)]
+pub enum Op {
+    Add,
+    Sub,
+}
+
+#[derive(Debug)]
 pub enum Token {
     OpenBrace,
     CloseBrace,
@@ -13,7 +19,7 @@ pub enum Token {
     Keyword(String),
     Identifier(String),
     Literal(i32),
-    Operation(char)
+    Operation(Op),
 }
 
 pub fn lex(contents: String) -> Vec<Token> {
@@ -59,9 +65,13 @@ pub fn lex(contents: String) -> Vec<Token> {
                         let int: i32 = word.parse().expect("Not a number");
                         tokens.push(Token::Literal(int))
                     },
-                    op @ '-' | op @ '+' => {
+                    '-' => {
                         it.next();
-                        tokens.push(Token::Operation(op));
+                        tokens.push(Token::Operation(Op::Sub));
+                    },
+                    '+' => {
+                        it.next();
+                        tokens.push(Token::Operation(Op::Add));
                     }
                     other => {
                         panic!("Unknown token {:?}", other)
