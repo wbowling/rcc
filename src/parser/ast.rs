@@ -109,22 +109,15 @@ fn parse_statement(tokens: &mut Peekable<IntoIter<Token>>) -> Statement {
 
 fn parse_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
     let mut term = parse_term(tokens);
-    let mut gogo = true;
-    while gogo {
-        gogo = match tokens.peek() {
-            Some(&Token::Negation) => {
-                tokens.next();
+
+    loop {
+        match tokens.peek() {
+            Some(&Token::Negation) | Some(&Token::Addition) => {
+                let op = convert_binop(tokens.next());
                 let next_term = parse_term(tokens);
-                term = Expression::BinOp(BinOp::Subtraction, Box::new(term), Box::new(next_term));
-                true
+                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
             },
-            Some(&Token::Addition) => {
-                tokens.next();
-                let next_term = parse_term(tokens);
-                term = Expression::BinOp(BinOp::Addition, Box::new(term), Box::new(next_term));
-                true
-            },
-            _ => false
+            _ => break
         }
     }
     term
@@ -132,22 +125,15 @@ fn parse_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
 
 fn parse_term(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
     let mut term = parse_factor(tokens);
-    let mut gogo = true;
-    while gogo {
-        gogo = match tokens.peek() {
-            Some(&Token::Multiplication) => {
-                tokens.next();
+
+    loop {
+        match tokens.peek() {
+            Some(&Token::Multiplication) | Some(&Token::Division) => {
+                let op = convert_binop(tokens.next());
                 let next_factor = parse_factor(tokens);
-                term = Expression::BinOp(BinOp::Multiplication, Box::new(term), Box::new(next_factor));
-                true
+                term = Expression::BinOp(op, Box::new(term), Box::new(next_factor))
             },
-            Some(&Token::Division) => {
-                tokens.next();
-                let next_factor = parse_factor(tokens);
-                term = Expression::BinOp(BinOp::Division, Box::new(term), Box::new(next_factor));
-                true
-            },
-            _ => false
+            _ => break
         }
     }
     term
@@ -159,28 +145,38 @@ fn parse_factor(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
         Some(Token::OpenParen) => {
             let exp = parse_expression(tokens);
             if let Some(Token::CloseParen) = tokens.next() {
-                return exp
+                exp
             } else {
                 panic!("Must close the paren")
             }
         },
         Some(op @ Token::Negation) | Some(op @ Token::LogicalNeg) | Some(op @ Token::BitComp) => {
             let factor = parse_factor(tokens);
-            return Expression::UnOp(convert_op(op), Box::new(factor))
+            Expression::UnOp(convert_unop(op), Box::new(factor))
         },
         Some(Token::Literal(num)) => {
-            return Expression::Int(num)
+            Expression::Int(num)
         },
         op @ _ => panic!("Unknown token: {:?}", op)
 
     }
 }
 
-fn convert_op(token: Token) -> UnOp {
+fn convert_binop(token: Option<Token>) -> BinOp {
+    match token {
+        Some(Token::Multiplication) => BinOp::Multiplication,
+        Some(Token::Division) => BinOp::Division,
+        Some(Token::Addition) => BinOp::Addition,
+        Some(Token::Negation) => BinOp::Subtraction,
+        _ => panic!("Unsupported token {:?}, can only use: * / + -")
+    }
+}
+
+fn convert_unop(token: Token) -> UnOp {
     match token {
         Token::Negation => UnOp::Negation,
         Token::LogicalNeg => UnOp::LogicalNeg,
         Token::BitComp => UnOp::BitComp,
-        _ => panic!("Unsupported token {:?}, can only use !,~,-")
+        _ => panic!("Unsupported token {:?}, can only use: ! ~ -")
     }
 }
