@@ -1,5 +1,4 @@
 use super::ast::*;
-use super::token::UnOp;
 
 pub fn generate(prog: Program) -> String {
     match prog {
@@ -30,5 +29,6 @@ fn gen_expression(exp: Expression) -> String {
             };
             format!("{}{}", gen_expression(*exp), asm)
         },
+        _ => unimplemented!()
     }
 }

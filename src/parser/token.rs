@@ -4,13 +4,6 @@ use std::ascii::AsciiExt;
 
 
 #[derive(Debug)]
-pub enum UnOp {
-    Negation,
-    BitComp,
-    LogicalNeg
-}
-
-#[derive(Debug)]
 pub enum Token {
     OpenBrace,
     CloseBrace,
@@ -19,8 +12,13 @@ pub enum Token {
     SemiColon,
     Keyword(String),
     Identifier(String),
-    Literal(i32),
-    Operation(UnOp),
+    Literal(u64),
+    BitComp,
+    LogicalNeg,
+    Negation,
+    Addition,
+    Multiplication,
+    Division,
 }
 
 pub fn lex(contents: String) -> Vec<Token> {
@@ -63,20 +61,32 @@ pub fn lex(contents: String) -> Vec<Token> {
                     },
                     '0'...'9' => {
                         let word = it.take_while_ref(|x| x.is_ascii() && x.is_digit(10)).collect::<String>();
-                        let int: i32 = word.parse().expect("Not a number");
+                        let int: u64 = word.parse().expect("Not a number");
                         tokens.push(Token::Literal(int))
                     },
                     '-' => {
                         it.next();
-                        tokens.push(Token::Operation(UnOp::Negation));
+                        tokens.push(Token::Negation);
                     },
                     '!' => {
                         it.next();
-                        tokens.push(Token::Operation(UnOp::LogicalNeg));
+                        tokens.push(Token::LogicalNeg);
                     },
                     '~' => {
                         it.next();
-                        tokens.push(Token::Operation(UnOp::BitComp));
+                        tokens.push(Token::BitComp);
+                    },
+                    '+' => {
+                        it.next();
+                        tokens.push(Token::Addition);
+                    },
+                    '*' => {
+                        it.next();
+                        tokens.push(Token::Multiplication);
+                    },
+                    '/' => {
+                        it.next();
+                        tokens.push(Token::Division);
                     }
                     other => {
                         panic!("Unknown token {:?}", other)
