@@ -29,6 +29,13 @@ fn gen_expression(exp: Expression) -> String {
             };
             format!("{}{}", gen_expression(*exp), asm)
         },
-        _ => unimplemented!()
+        Expression::BinOp(op, exp1, exp2) => {
+            match op {
+                BinOp::Addition => format!("{}push %eax\n{}pop %ecx\n addl %ecx, %eax\n", gen_expression(*exp1), gen_expression(*exp2)),
+                BinOp::Subtraction => format!("{}push %eax\n{}pop %ecx\n subl %ecx, %eax\n", gen_expression(*exp2), gen_expression(*exp1)),
+                BinOp::Multiplication => format!("{}push %eax\n{}pop %ecx\n imul %ecx, %eax\n", gen_expression(*exp1), gen_expression(*exp2)),
+                BinOp::Division => format!("{}push %eax\n{}pop %ecx\n xor %edx, %edx\nidivl %ecx\n", gen_expression(*exp2), gen_expression(*exp1)),
+            }
+        }
     }
 }
