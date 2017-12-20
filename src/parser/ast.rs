@@ -32,7 +32,7 @@ pub struct Function {
 pub enum Expression {
     BinOp(BinOp, Box<Expression>, Box<Expression>),
     UnOp(UnOp, Box<Expression>),
-    Int(u64),
+    Int(u32),
 }
 
 #[derive(Debug)]

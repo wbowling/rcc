@@ -12,7 +12,7 @@ pub enum Token {
     SemiColon,
     Keyword(String),
     Identifier(String),
-    Literal(u64),
+    Literal(u32),
     BitComp,
     LogicalNeg,
     Negation,
@@ -61,7 +61,7 @@ pub fn lex(contents: String) -> Vec<Token> {
                     },
                     '0'...'9' => {
                         let word = it.take_while_ref(|x| x.is_ascii() && x.is_digit(10)).collect::<String>();
-                        let int: u64 = word.parse().expect("Not a number");
+                        let int: u32 = word.parse().expect("Not a number");
                         tokens.push(Token::Literal(int))
                     },
                     '-' => {
