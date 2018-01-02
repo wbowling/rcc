@@ -1,5 +1,8 @@
 #!/bin/bash
 
+padding_dots=$(printf '%0.1s' "."{1..60})
+padlength=50
+
 if [ "$1" == "" ]; then
     echo "USAGE: ./test_compiler.sh /path/to/compiler"
     exit 1
@@ -10,7 +13,7 @@ cmp=$1
 success_total=0
 failure_total=0
 
-num_stages=3
+num_stages=4
 for i in `seq 1 $num_stages`; do
     success=0
     fail=0
@@ -18,7 +21,7 @@ for i in `seq 1 $num_stages`; do
     echo "STAGE $i"
     echo "===================Valid Programs==================="
     for prog in ./stage_$i/valid/*.c; do
-        gcc $prog
+        gcc -w $prog
         ./a.out
         expected_exit_code=$?
         rm a.out
@@ -28,7 +31,8 @@ for i in `seq 1 $num_stages`; do
         ./$base
         actual_exit_code=$?
         test_name=$(basename $base)
-        echo -n "$test_name.............."
+        printf '%s' "$test_name"
+        printf '%*.*s' 0 $((padlength - ${#test_name})) "$padding_dots"
 
         if [ "$expected_exit_code" -ne "$actual_exit_code" ]
         then
@@ -48,7 +52,8 @@ for i in `seq 1 $num_stages`; do
         $cmp $prog >/dev/null 2>&1
         failed=$? #failed, as we expect, if exit code != 0
 
-        echo -n "$test_name.............."
+        printf '%s' "$test_name"
+        printf '%.*s' $((padlength - ${#test_name})) "$padding_dots"
 
         if [[ -f $base || -f $base".s" ]] #make sure neither executable nor assembly was produced
         then
