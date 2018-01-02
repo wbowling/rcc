@@ -76,7 +76,8 @@ fn gen_expression(exp: Expression) -> Vec<String> {
                     s("pop %ecx"),
                     s("xor %edx, %edx"),
                     s("idivl %ecx"),
-                ].concat()
+                ].concat(),
+                _ => unimplemented!()
             }
         }
     }

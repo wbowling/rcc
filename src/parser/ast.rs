@@ -15,6 +15,14 @@ pub enum BinOp {
     Subtraction,
     Multiplication,
     Division,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
+    Equal,
+    NotEqual,
+    And,
+    Or
 }
 
 #[derive(Debug)]
@@ -108,6 +116,73 @@ fn parse_statement(tokens: &mut Peekable<IntoIter<Token>>) -> Statement {
 }
 
 fn parse_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
+    let mut term = parse_logical_and_expression(tokens);
+
+    loop {
+        match tokens.peek() {
+            Some(&Token::Or) => {
+                let op = convert_binop(tokens.next());
+                let next_term = parse_logical_and_expression(tokens);
+                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
+            },
+            _ => break
+        }
+    }
+    term
+}
+
+fn parse_logical_and_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
+    let mut term = parse_equality_expression(tokens);
+
+    loop {
+        match tokens.peek() {
+            Some(&Token::And) => {
+                let op = convert_binop(tokens.next());
+                let next_term = parse_equality_expression(tokens);
+                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
+            },
+            _ => break
+        }
+    }
+    term
+}
+
+fn parse_equality_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
+    let mut term = parse_relational_expression(tokens);
+
+    loop {
+        match tokens.peek() {
+            Some(&Token::Equal) | Some(&Token::NotEqual) => {
+                let op = convert_binop(tokens.next());
+                let next_term = parse_relational_expression(tokens);
+                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
+            },
+            _ => break
+        }
+    }
+    term
+}
+
+fn parse_relational_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
+    let mut term = parse_additive_expression(tokens);
+
+    loop {
+        match tokens.peek() {
+            Some(&Token::LessThan)
+            | Some(&Token::GreaterThan)
+            | Some(&Token::LessThanOrEqual)
+            | Some(&Token::GreaterThanOrEqual) => {
+                let op = convert_binop(tokens.next());
+                let next_term = parse_additive_expression(tokens);
+                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
+            },
+            _ => break
+        }
+    }
+    term
+}
+
+fn parse_additive_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
     let mut term = parse_term(tokens);
 
     loop {
@@ -168,6 +243,14 @@ fn convert_binop(token: Option<Token>) -> BinOp {
         Some(Token::Division) => BinOp::Division,
         Some(Token::Addition) => BinOp::Addition,
         Some(Token::Negation) => BinOp::Subtraction,
+        Some(Token::LessThan) => BinOp::LessThan,
+        Some(Token::LessThanOrEqual) => BinOp::LessThanOrEqual,
+        Some(Token::GreaterThan) => BinOp::GreaterThan,
+        Some(Token::GreaterThanOrEqual) => BinOp::GreaterThanOrEqual,
+        Some(Token::Equal) => BinOp::Equal,
+        Some(Token::NotEqual) => BinOp::NotEqual,
+        Some(Token::And) => BinOp::And,
+        Some(Token::Or) => BinOp::Or,
         _ => panic!("Unsupported token {:?}, can only use: * / + -")
     }
 }
