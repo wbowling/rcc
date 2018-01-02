@@ -19,6 +19,7 @@ pub enum Token {
     Addition,
     Multiplication,
     Division,
+    Modulus,
     And,
     Or,
     Equal,
@@ -65,6 +66,7 @@ pub fn lex(contents: String) -> Vec<Token> {
                     '+' => tokens.push(Token::Addition),
                     '*' => tokens.push(Token::Multiplication),
                     '/' => tokens.push(Token::Division),
+                    '%' => tokens.push(Token::Modulus),
                     '<' | '>' | '!' => {
                         match it.peek() {
                             Some(&'=') => {

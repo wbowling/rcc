@@ -77,6 +77,15 @@ fn gen_expression(exp: Expression) -> Vec<String> {
                     s("xor %edx, %edx"),
                     s("idivl %ecx"),
                 ].concat(),
+                BinOp::Modulus => vec![
+                    gen_expression(*exp2),
+                    s("push %eax"),
+                    gen_expression(*exp1),
+                    s("pop %ecx"),
+                    s("xor %edx, %edx"),
+                    s("idivl %ecx"),
+                    s("movl %edx, %eax"),
+                ].concat(),
                 BinOp::Equal => vec![
                     gen_expression(*exp1),
                     s("push %eax"),

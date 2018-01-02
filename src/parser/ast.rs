@@ -15,6 +15,7 @@ pub enum BinOp {
     Subtraction,
     Multiplication,
     Division,
+    Modulus,
     LessThan,
     LessThanOrEqual,
     GreaterThan,
@@ -203,7 +204,7 @@ fn parse_term(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
 
     loop {
         match tokens.peek() {
-            Some(&Token::Multiplication) | Some(&Token::Division) => {
+            Some(&Token::Multiplication) | Some(&Token::Division) | Some(&Token::Modulus) => {
                 let op = convert_binop(tokens.next());
                 let next_factor = parse_factor(tokens);
                 term = Expression::BinOp(op, Box::new(term), Box::new(next_factor))
@@ -241,6 +242,7 @@ fn convert_binop(token: Option<Token>) -> BinOp {
     match token {
         Some(Token::Multiplication) => BinOp::Multiplication,
         Some(Token::Division) => BinOp::Division,
+        Some(Token::Modulus) => BinOp::Modulus,
         Some(Token::Addition) => BinOp::Addition,
         Some(Token::Negation) => BinOp::Subtraction,
         Some(Token::LessThan) => BinOp::LessThan,
