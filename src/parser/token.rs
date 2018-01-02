@@ -69,7 +69,8 @@ pub enum Token {
     BitwiseLeft,
     BitwiseRight,
     BitwiseAnd,
-
+    BitwiseXor,
+    BitwiseOr,
 }
 
 pub fn lex(contents: String) -> Vec<Token> {
@@ -103,6 +104,7 @@ pub fn lex(contents: String) -> Vec<Token> {
                     '*' => tokens.push(Token::Multiplication),
                     '/' => tokens.push(Token::Division),
                     '%' => tokens.push(Token::Modulus),
+                    '^' => tokens.push(Token::BitwiseXor),
                     multi => {
                         match (tokens.next().unwrap(), tokens.peek()) {
                             ('&', Some(&'&')) => tokens.push(Token::And),
@@ -117,6 +119,7 @@ pub fn lex(contents: String) -> Vec<Token> {
                             ('>', _) => tokens.push_back(Token::GreaterThan),
                             ('!', _) => tokens.push_back(Token::LogicalNeg),
                             ('&', _) => tokens.push_back(Token::BitwiseAnd),
+                            ('|', _) => tokens.push_back(Token::BitwiseOr),
                             _ => panic!("Unknown token {:?}", multi),
                         }
                     }

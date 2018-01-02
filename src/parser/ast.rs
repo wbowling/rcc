@@ -27,6 +27,8 @@ pub enum BinOp {
     BitwiseLeft,
     BitwiseRight,
     BitwiseAnd,
+    BitwiseXor,
+    BitwiseOr,
 }
 
 #[derive(Debug)]
@@ -131,6 +133,23 @@ fn parse_logical_and_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expre
     parse_gen_experssion(
         tokens,
         vec![Token::And],
+        &parse_bitwise_or_expression
+    )
+}
+
+fn parse_bitwise_or_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
+    parse_gen_experssion(
+        tokens,
+        vec![Token::BitwiseOr],
+        &parse_bitwise_xor_expression
+    )
+}
+
+
+fn parse_bitwise_xor_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
+    parse_gen_experssion(
+        tokens,
+        vec![Token::BitwiseXor],
         &parse_bitwise_and_expression
     )
 }
@@ -239,7 +258,9 @@ fn convert_binop(token: Option<Token>) -> BinOp {
         Some(Token::BitwiseLeft) => BinOp::BitwiseLeft,
         Some(Token::BitwiseRight) => BinOp::BitwiseRight,
         Some(Token::BitwiseAnd) => BinOp::BitwiseAnd,
-        _ => panic!("Unsupported token {:?}, can only use: * / + -")
+        Some(Token::BitwiseXor) => BinOp::BitwiseXor,
+        Some(Token::BitwiseOr) => BinOp::BitwiseOr,
+        _ => panic!("Unsupported token {:?}")
     }
 }
 
