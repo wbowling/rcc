@@ -41,7 +41,7 @@ impl<'a> TokenParser<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Token {
     OpenBrace,
     CloseBrace,

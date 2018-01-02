@@ -120,134 +120,65 @@ fn parse_statement(tokens: &mut Peekable<IntoIter<Token>>) -> Statement {
 }
 
 fn parse_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
-    let mut term = parse_logical_and_expression(tokens);
-
-    loop {
-        match tokens.peek() {
-            Some(&Token::Or) => {
-                let op = convert_binop(tokens.next());
-                let next_term = parse_logical_and_expression(tokens);
-                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
-            },
-            _ => break
-        }
-    }
-    term
+    parse_gen_experssion(
+        tokens,
+        vec![Token::Or],
+        &parse_logical_and_expression
+    )
 }
 
 fn parse_logical_and_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
-    let mut term = parse_bitwise_and_expression(tokens);
-
-    loop {
-        match tokens.peek() {
-            Some(&Token::And) => {
-                let op = convert_binop(tokens.next());
-                let next_term = parse_bitwise_and_expression(tokens);
-                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
-            },
-            _ => break
-        }
-    }
-    term
+    parse_gen_experssion(
+        tokens,
+        vec![Token::And],
+        &parse_bitwise_and_expression
+    )
 }
 
 fn parse_bitwise_and_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
-    let mut term = parse_equality_expression(tokens);
-
-    loop {
-        match tokens.peek() {
-            Some(&Token::BitwiseAnd) => {
-                let op = convert_binop(tokens.next());
-                let next_term = parse_equality_expression(tokens);
-                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
-            },
-            _ => break
-        }
-    }
-    term
+    parse_gen_experssion(
+        tokens,
+        vec![Token::BitwiseAnd],
+        &parse_equality_expression
+    )
 }
 
 fn parse_equality_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
-    let mut term = parse_relational_expression(tokens);
-
-    loop {
-        match tokens.peek() {
-            Some(&Token::Equal) | Some(&Token::NotEqual) => {
-                let op = convert_binop(tokens.next());
-                let next_term = parse_relational_expression(tokens);
-                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
-            },
-            _ => break
-        }
-    }
-    term
+    parse_gen_experssion(
+        tokens,
+        vec![Token::Equal, Token::NotEqual],
+        &parse_relational_expression
+    )
 }
 
 fn parse_relational_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
-    let mut term = parse_bitshift_expression(tokens);
-
-    loop {
-        match tokens.peek() {
-            Some(&Token::LessThan)
-            | Some(&Token::GreaterThan)
-            | Some(&Token::LessThanOrEqual)
-            | Some(&Token::GreaterThanOrEqual) => {
-                let op = convert_binop(tokens.next());
-                let next_term = parse_bitshift_expression(tokens);
-                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
-            },
-            _ => break
-        }
-    }
-    term
+    parse_gen_experssion(
+        tokens,
+        vec![Token::LessThan, Token::GreaterThan, Token::LessThanOrEqual, Token::GreaterThanOrEqual],
+        &parse_bitshift_expression
+    )
 }
 
 fn parse_bitshift_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
-    let mut term = parse_additive_expression(tokens);
-
-    loop {
-        match tokens.peek() {
-            Some(&Token::BitwiseLeft) | Some(&Token::BitwiseRight) => {
-                let op = convert_binop(tokens.next());
-                let next_term = parse_additive_expression(tokens);
-                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
-            },
-            _ => break
-        }
-    }
-    term
+    parse_gen_experssion(
+        tokens,
+        vec![Token::BitwiseLeft, Token::BitwiseRight],
+        &parse_additive_expression
+    )
 }
 
 fn parse_additive_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
-    let mut term = parse_term(tokens);
-
-    loop {
-        match tokens.peek() {
-            Some(&Token::Negation) | Some(&Token::Addition) => {
-                let op = convert_binop(tokens.next());
-                let next_term = parse_term(tokens);
-                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
-            },
-            _ => break
-        }
-    }
-    term
+    parse_gen_experssion(
+        tokens,
+        vec![Token::Negation, Token::Addition],
+        &parse_multiplicative_expression)
 }
 
-fn parse_term(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
-    let mut term = parse_factor(tokens);
-
-    loop {
-        match tokens.peek() {
-            Some(&Token::Multiplication) | Some(&Token::Division) | Some(&Token::Modulus) => {
-                let op = convert_binop(tokens.next());
-                let next_factor = parse_factor(tokens);
-                term = Expression::BinOp(op, Box::new(term), Box::new(next_factor))
-            },
-            _ => break
-        }
-    }
-    term
+fn parse_multiplicative_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
+    parse_gen_experssion(
+        tokens,
+        vec![Token::Multiplication, Token::Division, Token::Modulus],
+        &parse_factor)
 }
 
 fn parse_factor(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
@@ -271,6 +202,23 @@ fn parse_factor(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
         op @ _ => panic!("Unknown token: {:?}", op)
 
     }
+}
+
+fn parse_gen_experssion<F>(tokens: &mut Peekable<IntoIter<Token>>, matching: Vec<Token>, next: F) -> Expression
+    where F: Fn(&mut Peekable<IntoIter<Token>>) -> Expression {
+    let mut term = next(tokens);
+
+    loop {
+        match tokens.peek().map(|c| matching.contains(c)) {
+            Some(true) => {
+                let op = convert_binop(tokens.next());
+                let next_term = next(tokens);
+                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
+            },
+            _ => break
+        }
+    }
+    term
 }
 
 fn convert_binop(token: Option<Token>) -> BinOp {
