@@ -189,6 +189,9 @@ fn gen_expression(exp: Expression) -> Vec<String> {
                     s("xorl %ecx, %eax"),
                 ].concat(),
             }
+        },
+        Expression::FunctionCall(name) => {
+            vec![format!("call _{}", name)]
         }
     }
 }

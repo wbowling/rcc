@@ -47,6 +47,7 @@ pub enum Expression {
     BinOp(BinOp, Box<Expression>, Box<Expression>),
     UnOp(UnOp, Box<Expression>),
     Int(u32),
+    FunctionCall(String),
 }
 
 #[derive(Debug)]
@@ -218,6 +219,10 @@ fn parse_factor(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
         Some(Token::Literal(num)) => {
             Expression::Int(num)
         },
+        Some(Token::Identifier(name)) => match (tokens.next(), tokens.next()) {
+            (Some(Token::OpenParen), Some(Token::CloseParen)) => Expression::FunctionCall(name),
+            _ => panic!("arguments not supported")
+        }
         op @ _ => panic!("Unknown token: {:?}", op)
 
     }
