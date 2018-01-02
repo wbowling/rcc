@@ -66,6 +66,8 @@ pub enum Token {
     LessThanOrEqual,
     GreaterThan,
     GreaterThanOrEqual,
+    BitwiseLeft,
+    BitwiseRight,
 
 }
 
@@ -108,6 +110,8 @@ pub fn lex(contents: String) -> Vec<Token> {
                             ('>', Some(&'=')) => tokens.push(Token::GreaterThanOrEqual),
                             ('=', Some(&'=')) => tokens.push(Token::Equal),
                             ('!', Some(&'=')) => tokens.push(Token::NotEqual),
+                            ('<', Some(&'<')) => tokens.push(Token::BitwiseLeft),
+                            ('>', Some(&'>')) => tokens.push(Token::BitwiseRight),
                             ('<', _) => tokens.push_back(Token::LessThan),
                             ('>', _) => tokens.push_back(Token::GreaterThan),
                             ('!', _) => tokens.push_back(Token::LogicalNeg),

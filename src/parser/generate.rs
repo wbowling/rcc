@@ -153,6 +153,20 @@ fn gen_expression(exp: Expression) -> Vec<String> {
                     s("setne %al"),
                     s("andb %cl, %al"),
                 ].concat(),
+                BinOp::BitwiseLeft => vec![
+                    gen_expression(*exp2),
+                    s("push %eax"),
+                    gen_expression(*exp1),
+                    s("pop %ecx"),
+                    s("shll %cl, %eax")
+                ].concat(),
+                BinOp::BitwiseRight => vec![
+                    gen_expression(*exp2),
+                    s("push %eax"),
+                    gen_expression(*exp1),
+                    s("pop %ecx"),
+                    s("shrl %cl, %eax")
+                ].concat(),
             }
         }
     }

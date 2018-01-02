@@ -23,7 +23,9 @@ pub enum BinOp {
     Equal,
     NotEqual,
     And,
-    Or
+    Or,
+    BitwiseLeft,
+    BitwiseRight,
 }
 
 #[derive(Debug)]
@@ -165,7 +167,7 @@ fn parse_equality_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expressi
 }
 
 fn parse_relational_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
-    let mut term = parse_additive_expression(tokens);
+    let mut term = parse_bitshift_expression(tokens);
 
     loop {
         match tokens.peek() {
@@ -173,6 +175,22 @@ fn parse_relational_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expres
             | Some(&Token::GreaterThan)
             | Some(&Token::LessThanOrEqual)
             | Some(&Token::GreaterThanOrEqual) => {
+                let op = convert_binop(tokens.next());
+                let next_term = parse_bitshift_expression(tokens);
+                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
+            },
+            _ => break
+        }
+    }
+    term
+}
+
+fn parse_bitshift_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
+    let mut term = parse_additive_expression(tokens);
+
+    loop {
+        match tokens.peek() {
+            Some(&Token::BitwiseLeft) | Some(&Token::BitwiseRight) => {
                 let op = convert_binop(tokens.next());
                 let next_term = parse_additive_expression(tokens);
                 term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
@@ -253,6 +271,8 @@ fn convert_binop(token: Option<Token>) -> BinOp {
         Some(Token::NotEqual) => BinOp::NotEqual,
         Some(Token::And) => BinOp::And,
         Some(Token::Or) => BinOp::Or,
+        Some(Token::BitwiseLeft) => BinOp::BitwiseLeft,
+        Some(Token::BitwiseRight) => BinOp::BitwiseRight,
         _ => panic!("Unsupported token {:?}, can only use: * / + -")
     }
 }
