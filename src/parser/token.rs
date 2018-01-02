@@ -68,6 +68,7 @@ pub enum Token {
     GreaterThanOrEqual,
     BitwiseLeft,
     BitwiseRight,
+    BitwiseAnd,
 
 }
 
@@ -115,6 +116,7 @@ pub fn lex(contents: String) -> Vec<Token> {
                             ('<', _) => tokens.push_back(Token::LessThan),
                             ('>', _) => tokens.push_back(Token::GreaterThan),
                             ('!', _) => tokens.push_back(Token::LogicalNeg),
+                            ('&', _) => tokens.push_back(Token::BitwiseAnd),
                             _ => panic!("Unknown token {:?}", multi),
                         }
                     }

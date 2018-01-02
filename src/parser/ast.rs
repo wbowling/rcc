@@ -26,6 +26,7 @@ pub enum BinOp {
     Or,
     BitwiseLeft,
     BitwiseRight,
+    BitwiseAnd,
 }
 
 #[derive(Debug)]
@@ -135,11 +136,27 @@ fn parse_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
 }
 
 fn parse_logical_and_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
-    let mut term = parse_equality_expression(tokens);
+    let mut term = parse_bitwise_and_expression(tokens);
 
     loop {
         match tokens.peek() {
             Some(&Token::And) => {
+                let op = convert_binop(tokens.next());
+                let next_term = parse_bitwise_and_expression(tokens);
+                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
+            },
+            _ => break
+        }
+    }
+    term
+}
+
+fn parse_bitwise_and_expression(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
+    let mut term = parse_equality_expression(tokens);
+
+    loop {
+        match tokens.peek() {
+            Some(&Token::BitwiseAnd) => {
                 let op = convert_binop(tokens.next());
                 let next_term = parse_equality_expression(tokens);
                 term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
@@ -273,6 +290,7 @@ fn convert_binop(token: Option<Token>) -> BinOp {
         Some(Token::Or) => BinOp::Or,
         Some(Token::BitwiseLeft) => BinOp::BitwiseLeft,
         Some(Token::BitwiseRight) => BinOp::BitwiseRight,
+        Some(Token::BitwiseAnd) => BinOp::BitwiseAnd,
         _ => panic!("Unsupported token {:?}, can only use: * / + -")
     }
 }
