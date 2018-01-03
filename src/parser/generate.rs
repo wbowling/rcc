@@ -2,7 +2,16 @@ use super::ast::*;
 
 pub fn generate(prog: Program) -> String {
     let asm: Vec<String> = match prog {
-        Program { func } => func.into_iter().map(|a| { gen_function(a).join("\n") }).collect(),
+        Program { func, globals } => {
+            let text: Vec<String> = func.into_iter().map(|a| gen_function(a).join("\n") ).collect();
+            let data : Vec<String> = globals.into_iter().map(|g| format!("_{0}: .word 0", g)).collect();
+
+            vec![
+                text,
+                s(".data"),
+                data,
+            ].concat()
+        },
     };
 
     asm.join("\n")
@@ -10,13 +19,14 @@ pub fn generate(prog: Program) -> String {
 
 fn gen_function(fun: Function) -> Vec<String> {
     match fun {
-        Function { name, statement } => {
+        Function { name, statements } => {
+            let s: Vec<Vec<String>> = statements.into_iter().map(|statement| gen_statement(statement)).collect();
             vec![
                 vec![
                     format!(".global _{0}", name),
                     format!("_{0}:", name)
                 ],
-                gen_statement(statement)
+                s.concat(),
             ].concat()
         }
     }
@@ -27,6 +37,10 @@ fn gen_statement(stat: Statement) -> Vec<String> {
         Statement::Return(exp) => vec![
             gen_expression(exp),
             s("ret")
+        ].concat(),
+        Statement::Assign(name, exp) => vec![
+            gen_expression(exp),
+            vec![format!("movl %eax, _{}", name)]
         ].concat(),
     }
 }
@@ -190,6 +204,9 @@ fn gen_expression(exp: Expression) -> Vec<String> {
                 ].concat(),
             }
         },
+        Expression::Variable(name) => {
+            vec![format!("movl _{}, %eax", name)]
+        }
         Expression::FunctionCall(name) => {
             vec![format!("call _{}", name)]
         }

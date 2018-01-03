@@ -71,6 +71,7 @@ pub enum Token {
     BitwiseAnd,
     BitwiseXor,
     BitwiseOr,
+    Assign,
 }
 
 pub fn lex(contents: String) -> Vec<Token> {
@@ -120,6 +121,7 @@ pub fn lex(contents: String) -> Vec<Token> {
                             ('!', _) => tokens.push_back(Token::LogicalNeg),
                             ('&', _) => tokens.push_back(Token::BitwiseAnd),
                             ('|', _) => tokens.push_back(Token::BitwiseOr),
+                            ('=', _) => tokens.push_back(Token::Assign),
                             _ => panic!("Unknown token {:?}", multi),
                         }
                     }

@@ -33,13 +33,14 @@ pub enum BinOp {
 
 #[derive(Debug)]
 pub struct Program {
-    pub func: Vec<Function>
+    pub func: Vec<Function>,
+    pub globals: Vec<String>
 }
 
 #[derive(Debug)]
 pub struct Function {
     pub name: String,
-    pub statement: Statement
+    pub statements: Vec<Statement>
 }
 
 #[derive(Debug)]
@@ -48,21 +49,24 @@ pub enum Expression {
     UnOp(UnOp, Box<Expression>),
     Int(u32),
     FunctionCall(String),
+    Variable(String),
 }
 
 #[derive(Debug)]
 pub enum Statement {
-    Return(Expression)
+    Assign(String, Expression),
+    Return(Expression),
 }
 
 pub fn parse_program(tokens: &mut Peekable<IntoIter<Token>>) -> Program {
     let mut functions = Vec::new();
+    let mut globals: Vec<String> = Vec::new();
     while let Some(_) = tokens.peek() {
-        functions.push(parse_function(tokens));
+        functions.push(parse_function(tokens, &mut globals))
     }
 
     if tokens.next().is_some() { panic!("Should be at the end") };
-    Program { func: functions }
+    Program { func: functions, globals }
 }
 
 fn next_token(tokens: &mut Peekable<IntoIter<Token>>) -> Token {
@@ -72,7 +76,7 @@ fn next_token(tokens: &mut Peekable<IntoIter<Token>>) -> Token {
     }.expect("failed to parse")
 }
 
-fn parse_function(tokens: &mut Peekable<IntoIter<Token>>) -> Function {
+fn parse_function(tokens: &mut Peekable<IntoIter<Token>>, globals: &mut Vec<String>) -> Function {
     match next_token(tokens) {
         Token::Keyword(ref word) if word == "int" => Ok(()),
         other => Err(format!("Expected SemiColon, found {:?}", other))
@@ -97,22 +101,39 @@ fn parse_function(tokens: &mut Peekable<IntoIter<Token>>) -> Function {
             other => Err(format!("Expected OpenBrace, found {:?}", other))
         }
     }).and_then(|name| {
-        let statement = parse_statement(tokens);
-        match next_token(tokens) {
-            Token::CloseBrace => Ok(Function { name, statement }),
-            other => Err(format!("Expected CloseBrace, found {:?}", other))
+        let mut statements = vec![];
+        loop {
+            if let Some(&Token::CloseBrace) = tokens.peek() {
+                tokens.next();
+                break
+            } else {
+                statements.push(parse_statement(tokens, globals))
+            }
         }
+
+        Ok(Function { name, statements })
     }).expect("failed to parse")
 }
 
-fn parse_statement(tokens: &mut Peekable<IntoIter<Token>>) -> Statement {
-    match tokens.next() {
-        Some(Token::Keyword(ref word)) if word == "return" => Ok(true),
+fn parse_statement(tokens: &mut Peekable<IntoIter<Token>>, globals: &mut Vec<String>) -> Statement {
+    let state: Statement = match tokens.next() {
+        Some(Token::Keyword(ref word)) if word == "int" => {
+            let name = match (next_token(tokens), next_token(tokens)) {
+                (Token::Identifier(n), Token::Assign) => Ok(n),
+                other => Err(format!("Expected name =, found {:?}", other))
+            }.expect("failed to parse");
+            globals.push(name.clone());
+            let exp = parse_expression(tokens);
+            Ok(Statement::Assign(name, exp))
+        }
+        Some(Token::Keyword(ref word)) if word == "return" => {
+            let exp = parse_expression(tokens);
+            Ok(Statement::Return(exp))
+        },
         other => Err(format!("Expected return, found {:?}", other))
     }.expect("failed to parse");
 
-    let exp = parse_expression(tokens);
-    let state = Statement::Return(exp);
+
 
     let res = match tokens.next() {
         Some(Token::SemiColon) => Ok(state),
@@ -219,9 +240,8 @@ fn parse_factor(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
         Some(Token::Literal(num)) => {
             Expression::Int(num)
         },
-        Some(Token::Identifier(name)) => match (tokens.next(), tokens.next()) {
-            (Some(Token::OpenParen), Some(Token::CloseParen)) => Expression::FunctionCall(name),
-            _ => panic!("arguments not supported")
+        Some(Token::Identifier(name)) => {
+            Expression::Variable(name)
         }
         op @ _ => panic!("Unknown token: {:?}", op)
 

@@ -49,6 +49,7 @@ fn compile(path: &PathBuf) {
     let output = Command::new("gcc")
         .arg("-m32")
         .arg(path)
+        .arg("-Wl,-no_pie")
         .arg("-o")
         .arg(dest)
         .output()
