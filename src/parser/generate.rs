@@ -20,13 +20,19 @@ pub fn generate(prog: Program) -> String {
 
 fn gen_function(fun: Function) -> Vec<String> {
     match fun {
-        Function { name, statements, variables } => {
-            let var_count = variables.len();
-            let mut var_map: HashMap<String, usize> = HashMap::new();
-            let mut i = 1;
+        Function { name, arguments, statements, variables } => {
+            let mut var_map: HashMap<String, i32> = HashMap::new();
+
+            let mut i = -4;
             for var in variables {
                 var_map.insert(var, i);
-                i += 1;
+                i -= 4;
+            }
+
+            i = 4;
+            for var in arguments {
+                var_map.insert(var, i);
+                i += 4;
             }
             let asm_list: Vec<Vec<String>> = statements.into_iter().map(|statement| gen_statement(statement, &var_map)).collect();
             vec![
@@ -36,29 +42,29 @@ fn gen_function(fun: Function) -> Vec<String> {
                 ],
                 s("pushl %ebp"),
                 s("movl %esp, %ebp"),
-                vec![format!("subl	${}, %esp", 4 * var_map.values().max().unwrap_or(&1))],
+                vec![format!("subl	${}, %esp", -1 * var_map.values().min().unwrap_or(&-4))],
                 asm_list.concat(),
             ].concat()
         }
     }
 }
 
-fn gen_statement(stat: Statement, var_map: &HashMap<String, usize>) -> Vec<String> {
+fn gen_statement(stat: Statement, var_map: &HashMap<String, i32>) -> Vec<String> {
     match stat {
         Statement::Return(exp) => vec![
             gen_expression(exp, var_map),
-            vec![format!("addl	${}, %esp", 4 * var_map.values().max().unwrap_or(&1))],
+            vec![format!("addl	${}, %esp", -1 * var_map.values().min().unwrap_or(&-4))],
             s("popl %ebp"),
             s("ret")
         ].concat(),
         Statement::Declare(name, exp) | Statement::Assign(name, exp) => vec![
             gen_expression(exp, var_map),
-            vec![format!("movl %eax, -{}(%ebp)", 4 * var_map.get(&name).expect("Variable not found"))]
+            vec![format!("movl %eax, {}(%ebp)", var_map.get(&name).expect("Variable not found"))]
         ].concat(),
     }
 }
 
-fn gen_expression(exp: Expression, var_map: &HashMap<String, usize>) -> Vec<String> {
+fn gen_expression(exp: Expression, var_map: &HashMap<String, i32>) -> Vec<String> {
     match exp {
         Expression::Int(val) => vec![format!("movl ${}, %eax", val)],
         Expression::UnOp(op, exp) => {
@@ -218,10 +224,17 @@ fn gen_expression(exp: Expression, var_map: &HashMap<String, usize>) -> Vec<Stri
             }
         },
         Expression::Variable(name) => {
-            vec![format!("movl -{}(%ebp), %eax", 4 * var_map.get(&name).expect("variable not found"))]
+            vec![format!("movl {}(%ebp), %eax", var_map.get(&name).expect("variable not found"))]
         }
-        Expression::FunctionCall(name) => {
-            vec![format!("call _{}", name)]
+        Expression::FunctionCall(name, arguments) => {
+            let mut args= arguments.into_iter().rev().map(|exp|{
+                vec![
+                    gen_expression(exp, var_map),
+                    s("push %eax")
+                ].concat()
+            }).collect::<Vec<Vec<String>>>().concat();
+            args.push(format!("call _{}", name));
+            args
         }
     }
 }

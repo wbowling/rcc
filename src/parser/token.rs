@@ -72,6 +72,7 @@ pub enum Token {
     BitwiseXor,
     BitwiseOr,
     Assign,
+    Comma
 }
 
 pub fn lex(contents: String) -> Vec<Token> {
@@ -106,6 +107,7 @@ pub fn lex(contents: String) -> Vec<Token> {
                     '/' => tokens.push(Token::Division),
                     '%' => tokens.push(Token::Modulus),
                     '^' => tokens.push(Token::BitwiseXor),
+                    ',' => tokens.push(Token::Comma),
                     multi => {
                         match (tokens.next().unwrap(), tokens.peek()) {
                             ('&', Some(&'&')) => tokens.push(Token::And),

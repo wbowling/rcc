@@ -41,6 +41,7 @@ pub struct Program {
 #[derive(Debug)]
 pub struct Function {
     pub name: String,
+    pub arguments: Vec<String>,
     pub statements: Vec<Statement>,
     pub variables: Vec<String>
 }
@@ -50,7 +51,7 @@ pub enum Expression {
     BinOp(BinOp, Box<Expression>, Box<Expression>),
     UnOp(UnOp, Box<Expression>),
     Int(u32),
-    FunctionCall(String),
+    FunctionCall(String, Vec<Expression>),
     Variable(String),
 }
 
@@ -96,6 +97,7 @@ fn parse_function(tokens: &mut Peekable<IntoIter<Token>>) -> Function {
             Token::OpenParen => Ok(name),
             other => Err(format!("Expected OpenParen, found {:?}", other))
         }
+//        TODO function arguments
     }).and_then(|name| {
         match next_token(tokens) {
             Token::CloseParen => Ok(name),
@@ -108,6 +110,7 @@ fn parse_function(tokens: &mut Peekable<IntoIter<Token>>) -> Function {
         }
     }).and_then(|name| {
         let mut statements = vec![];
+        let arguments = vec![];
         let mut variables: HashSet<String> = HashSet::new();
         loop {
             if let Some(&Token::CloseBrace) = tokens.peek() {
@@ -126,7 +129,7 @@ fn parse_function(tokens: &mut Peekable<IntoIter<Token>>) -> Function {
             }
         }
 
-        Ok(Function { name, statements, variables: variables.into_iter().collect() })
+        Ok(Function { name, arguments, statements, variables: variables.into_iter().collect() })
     }).expect("failed to parse")
 }
 
@@ -265,11 +268,41 @@ fn parse_factor(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
             Expression::Int(num)
         },
         Some(Token::Identifier(name)) => {
-            Expression::Variable(name)
+            match tokens.peek() {
+                Some(&Token::OpenParen) => Expression::FunctionCall(name, parse_function_arguments(tokens)),
+                _ => Expression::Variable(name)
+            }
+
         }
         op @ _ => panic!("Unknown token: {:?}", op)
 
     }
+}
+
+fn parse_function_arguments(tokens: &mut Peekable<IntoIter<Token>>) -> Vec<Expression> {
+    let mut arguments = vec![];
+    tokens.next();
+    loop {
+        if let Some(&Token::CloseParen) = tokens.peek() {
+            tokens.next();
+            break
+        } else {
+            let exp = parse_expression(tokens);
+            arguments.push(exp);
+            if let Some(&Token::CloseParen) = tokens.peek() {
+                tokens.next();
+                break
+            } else {
+                if let Some(&Token::Comma) = tokens.peek() {
+                    tokens.next();
+                } else {
+                    panic!("Invalid function call")
+                }
+            }
+        }
+    }
+
+    arguments
 }
 
 fn parse_gen_experssion<F>(tokens: &mut Peekable<IntoIter<Token>>, matching: Vec<Token>, next: F) -> Expression

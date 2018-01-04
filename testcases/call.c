@@ -1,11 +1,13 @@
-int lala() {
+int lala1() {
     return 5 * 2;
 }
 
 int lala2() {
-    return 4 * 4;
+    int a = 7;
+    return 9 * a;
 }
 
+
 int main() {
-    return lala() + lala2();
+    return lala1(1, 2, 3) + lala2();
 }
