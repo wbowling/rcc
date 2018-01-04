@@ -1,4 +1,5 @@
 use super::ast::*;
+use std::collections::HashMap;
 
 pub fn generate(prog: Program) -> String {
     let asm: Vec<String> = match prog {
@@ -19,33 +20,45 @@ pub fn generate(prog: Program) -> String {
 
 fn gen_function(fun: Function) -> Vec<String> {
     match fun {
-        Function { name, statements } => {
-            let s: Vec<Vec<String>> = statements.into_iter().map(|statement| gen_statement(statement)).collect();
+        Function { name, statements, variables } => {
+            let var_count = variables.len();
+            let mut var_map: HashMap<String, usize> = HashMap::new();
+            let mut i = 1;
+            for var in variables {
+                var_map.insert(var, i);
+                i += 1;
+            }
+            let asm_list: Vec<Vec<String>> = statements.into_iter().map(|statement| gen_statement(statement, &var_map)).collect();
             vec![
                 vec![
                     format!(".global _{0}", name),
-                    format!("_{0}:", name)
+                    format!("_{0}:", name),
                 ],
-                s.concat(),
+                s("pushl %ebp"),
+                s("movl %esp, %ebp"),
+                vec![format!("subl	${}, %esp", 4 * var_map.values().max().unwrap_or(&1))],
+                asm_list.concat(),
             ].concat()
         }
     }
 }
 
-fn gen_statement(stat: Statement) -> Vec<String> {
+fn gen_statement(stat: Statement, var_map: &HashMap<String, usize>) -> Vec<String> {
     match stat {
         Statement::Return(exp) => vec![
-            gen_expression(exp),
+            gen_expression(exp, var_map),
+            vec![format!("addl	${}, %esp", 4 * var_map.values().max().unwrap_or(&1))],
+            s("popl %ebp"),
             s("ret")
         ].concat(),
-        Statement::Assign(name, exp) => vec![
-            gen_expression(exp),
-            vec![format!("movl %eax, _{}", name)]
+        Statement::Declare(name, exp) | Statement::Assign(name, exp) => vec![
+            gen_expression(exp, var_map),
+            vec![format!("movl %eax, -{}(%ebp)", 4 * var_map.get(&name).expect("Variable not found"))]
         ].concat(),
     }
 }
 
-fn gen_expression(exp: Expression) -> Vec<String> {
+fn gen_expression(exp: Expression, var_map: &HashMap<String, usize>) -> Vec<String> {
     match exp {
         Expression::Int(val) => vec![format!("movl ${}, %eax", val)],
         Expression::UnOp(op, exp) => {
@@ -58,108 +71,108 @@ fn gen_expression(exp: Expression) -> Vec<String> {
                     "sete %al"
                 ]),
             };
-            vec![gen_expression(*exp), asm].concat()
+            vec![gen_expression(*exp, var_map), asm].concat()
         },
         Expression::BinOp(op, exp1, exp2) => {
             match op {
                 BinOp::Addition => vec![
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("push %eax"),
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("pop %ecx"),
                     s("addl %ecx, %eax"),
                 ].concat(),
                 BinOp::Subtraction => vec![
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("push %eax"),
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("pop %ecx"),
                     s("subl %ecx, %eax"),
                 ].concat(),
                 BinOp::Multiplication => vec![
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("push %eax"),
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("pop %ecx"),
                     s("imul %ecx, %eax"),
                 ].concat(),
                 BinOp::Division => vec![
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("push %eax"),
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("pop %ecx"),
                     s("xor %edx, %edx"),
                     s("idivl %ecx"),
                 ].concat(),
                 BinOp::Modulus => vec![
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("push %eax"),
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("pop %ecx"),
                     s("xor %edx, %edx"),
                     s("idivl %ecx"),
                     s("movl %edx, %eax"),
                 ].concat(),
                 BinOp::Equal => vec![
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("push %eax"),
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("pop %ecx"),
                     s("cmpl %ecx, %eax"),
                     s("sete %al"),
                 ].concat(),
                 BinOp::NotEqual => vec![
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("push %eax"),
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("pop %ecx"),
                     s("cmpl %ecx, %eax"),
                     s("setne %al"),
                 ].concat(),
                 BinOp::LessThan => vec![
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("push %eax"),
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("pop %ecx"),
                     s("cmpl %ecx, %eax"),
                     s("setl %al"),
                 ].concat(),
                 BinOp::LessThanOrEqual => vec![
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("push %eax"),
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("pop %ecx"),
                     s("cmpl %ecx, %eax"),
                     s("setle %al"),
                 ].concat(),
                 BinOp::GreaterThan => vec![
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("push %eax"),
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("pop %ecx"),
                     s("cmpl %ecx, %eax"),
                     s("setg %al"),
                 ].concat(),
                 BinOp::GreaterThanOrEqual => vec![
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("push %eax"),
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("pop %ecx"),
                     s("cmpl %ecx, %eax"),
                     s("setge %al"),
                 ].concat(),
                 BinOp::Or => vec![
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("push %eax"),
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("pop %ecx"),
                     s("orl %ecx, %eax"),
                     s("setne %al"),
                 ].concat(),
                 BinOp::And => vec![
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("push %eax"),
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("pop %ecx"),
                     s("cmpl $0, %ecx"),
                     s("setne %cl"),
@@ -168,44 +181,44 @@ fn gen_expression(exp: Expression) -> Vec<String> {
                     s("andb %cl, %al"),
                 ].concat(),
                 BinOp::BitwiseLeft => vec![
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("push %eax"),
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("pop %ecx"),
                     s("shll %cl, %eax")
                 ].concat(),
                 BinOp::BitwiseRight => vec![
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("push %eax"),
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("pop %ecx"),
                     s("shrl %cl, %eax")
                 ].concat(),
                 BinOp::BitwiseAnd => vec![
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("push %eax"),
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("pop %ecx"),
                     s("andl %ecx, %eax")
                 ].concat(),
                 BinOp::BitwiseOr => vec![
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("push %eax"),
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("pop %ecx"),
                     s("orl %ecx, %eax"),
                 ].concat(),
                 BinOp::BitwiseXor => vec![
-                    gen_expression(*exp1),
+                    gen_expression(*exp1, var_map),
                     s("push %eax"),
-                    gen_expression(*exp2),
+                    gen_expression(*exp2, var_map),
                     s("pop %ecx"),
                     s("xorl %ecx, %eax"),
                 ].concat(),
             }
         },
         Expression::Variable(name) => {
-            vec![format!("movl _{}, %eax", name)]
+            vec![format!("movl -{}(%ebp), %eax", 4 * var_map.get(&name).expect("variable not found"))]
         }
         Expression::FunctionCall(name) => {
             vec![format!("call _{}", name)]

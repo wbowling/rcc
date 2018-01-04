@@ -1,6 +1,7 @@
 use super::token::Token;
 use std::vec::IntoIter;
 use std::iter::Peekable;
+use std::collections::HashSet;
 
 #[derive(Debug)]
 pub enum UnOp {
@@ -40,7 +41,8 @@ pub struct Program {
 #[derive(Debug)]
 pub struct Function {
     pub name: String,
-    pub statements: Vec<Statement>
+    pub statements: Vec<Statement>,
+    pub variables: Vec<String>
 }
 
 #[derive(Debug)]
@@ -55,18 +57,22 @@ pub enum Expression {
 #[derive(Debug)]
 pub enum Statement {
     Assign(String, Expression),
+    Declare(String, Expression),
     Return(Expression),
 }
 
 pub fn parse_program(tokens: &mut Peekable<IntoIter<Token>>) -> Program {
     let mut functions = Vec::new();
-    let mut globals: Vec<String> = Vec::new();
-    while let Some(_) = tokens.peek() {
-        functions.push(parse_function(tokens, &mut globals))
+    let globals = HashSet::new();
+    loop {
+        match tokens.peek() {
+            Some(_) => functions.push(parse_function(tokens)),
+            None => break
+        }
     }
 
     if tokens.next().is_some() { panic!("Should be at the end") };
-    Program { func: functions, globals }
+    Program { func: functions, globals: globals.into_iter().collect() }
 }
 
 fn next_token(tokens: &mut Peekable<IntoIter<Token>>) -> Token {
@@ -76,10 +82,10 @@ fn next_token(tokens: &mut Peekable<IntoIter<Token>>) -> Token {
     }.expect("failed to parse")
 }
 
-fn parse_function(tokens: &mut Peekable<IntoIter<Token>>, globals: &mut Vec<String>) -> Function {
+fn parse_function(tokens: &mut Peekable<IntoIter<Token>>) -> Function {
     match next_token(tokens) {
         Token::Keyword(ref word) if word == "int" => Ok(()),
-        other => Err(format!("Expected SemiColon, found {:?}", other))
+        other => Err(format!("Expected Keyword int, found {:?}", other))
     }.and_then(|_| {
         match next_token(tokens) {
             Token::Identifier(n) => Ok(n),
@@ -102,33 +108,51 @@ fn parse_function(tokens: &mut Peekable<IntoIter<Token>>, globals: &mut Vec<Stri
         }
     }).and_then(|name| {
         let mut statements = vec![];
+        let mut variables: HashSet<String> = HashSet::new();
         loop {
             if let Some(&Token::CloseBrace) = tokens.peek() {
                 tokens.next();
                 break
             } else {
-                statements.push(parse_statement(tokens, globals))
+                let statement = parse_statement(tokens);
+                if let Statement::Declare(ref name, _) = statement {
+                    if variables.contains(name) {
+                        return Err(format!("Variable alreay defined: {}", name))
+                    } else {
+                        variables.insert(name.clone());
+                    }
+                }
+                statements.push(statement);
             }
         }
 
-        Ok(Function { name, statements })
+        Ok(Function { name, statements, variables: variables.into_iter().collect() })
     }).expect("failed to parse")
 }
 
-fn parse_statement(tokens: &mut Peekable<IntoIter<Token>>, globals: &mut Vec<String>) -> Statement {
+fn parse_statement(tokens: &mut Peekable<IntoIter<Token>>) -> Statement {
     let state: Statement = match tokens.next() {
         Some(Token::Keyword(ref word)) if word == "int" => {
             let name = match (next_token(tokens), next_token(tokens)) {
                 (Token::Identifier(n), Token::Assign) => Ok(n),
                 other => Err(format!("Expected name =, found {:?}", other))
             }.expect("failed to parse");
-            globals.push(name.clone());
+
             let exp = parse_expression(tokens);
-            Ok(Statement::Assign(name, exp))
+            Ok(Statement::Declare(name, exp))
         }
         Some(Token::Keyword(ref word)) if word == "return" => {
             let exp = parse_expression(tokens);
             Ok(Statement::Return(exp))
+        },
+        Some(Token::Identifier(name)) => {
+            match tokens.next() {
+                Some(Token::Assign) => {
+                    let exp = parse_expression(tokens);
+                    Ok(Statement::Assign(name, exp))
+                },
+                other => Err(format!("Expected Assign, found {:?}", other))
+            }
         },
         other => Err(format!("Expected return, found {:?}", other))
     }.expect("failed to parse");
