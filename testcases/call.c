@@ -9,5 +9,5 @@ int lala2() {
 
 
 int main() {
-    return lala1(1, 2, 3) + lala2();
+    return lala1() + lala2();
 }

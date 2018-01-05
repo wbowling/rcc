@@ -23,17 +23,19 @@ fn gen_function(fun: Function) -> Vec<String> {
         Function { name, arguments, statements, variables } => {
             let mut var_map: HashMap<String, i32> = HashMap::new();
 
-            let mut i = -4;
+            let mut i = 8;
+
+            for var in arguments {
+                var_map.insert(var, i);
+                i += 4;
+            }
+
+            i = -4;
             for var in variables {
                 var_map.insert(var, i);
                 i -= 4;
             }
 
-            i = 4;
-            for var in arguments {
-                var_map.insert(var, i);
-                i += 4;
-            }
             let asm_list: Vec<Vec<String>> = statements.into_iter().map(|statement| gen_statement(statement, &var_map)).collect();
             vec![
                 vec![
@@ -42,7 +44,7 @@ fn gen_function(fun: Function) -> Vec<String> {
                 ],
                 s("pushl %ebp"),
                 s("movl %esp, %ebp"),
-                vec![format!("subl	${}, %esp", -1 * var_map.values().min().unwrap_or(&-4))],
+                vec![format!("subl	${}, %esp", stack_size(&var_map))],
                 asm_list.concat(),
             ].concat()
         }
@@ -53,9 +55,9 @@ fn gen_statement(stat: Statement, var_map: &HashMap<String, i32>) -> Vec<String>
     match stat {
         Statement::Return(exp) => vec![
             gen_expression(exp, var_map),
-            vec![format!("addl	${}, %esp", -1 * var_map.values().min().unwrap_or(&-4))],
+            vec![format!("addl	${}, %esp", stack_size(var_map))],
             s("popl %ebp"),
-            s("ret")
+            s("ret\n")
         ].concat(),
         Statement::Declare(name, exp) | Statement::Assign(name, exp) => vec![
             gen_expression(exp, var_map),
@@ -227,10 +229,12 @@ fn gen_expression(exp: Expression, var_map: &HashMap<String, i32>) -> Vec<String
             vec![format!("movl {}(%ebp), %eax", var_map.get(&name).expect("variable not found"))]
         }
         Expression::FunctionCall(name, arguments) => {
-            let mut args= arguments.into_iter().rev().map(|exp|{
+            let mut i = -4;
+            let mut args= arguments.into_iter().map(|exp|{
+                i += 4;
                 vec![
                     gen_expression(exp, var_map),
-                    s("push %eax")
+                    vec![format!("movl %eax, {}(%esp)", i)]
                 ].concat()
             }).collect::<Vec<Vec<String>>>().concat();
             args.push(format!("call _{}", name));
@@ -245,4 +249,8 @@ fn s(string: &str) -> Vec<String> {
 
 fn sa(string: &[&str]) -> Vec<String> {
     string.iter().map({|s| s.to_string() }).collect()
+}
+
+fn stack_size(var_map: &HashMap<String, i32>) -> i32 {
+    16 + var_map.values().max().unwrap_or(&0)
 }

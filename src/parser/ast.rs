@@ -108,18 +108,35 @@ fn match_identifier(tokens: &mut Peekable<IntoIter<Token>>) -> Result<String, St
     }
 }
 
+fn parse_arguments(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Vec<String>, String> {
+    let mut arguments = vec![];
+    loop {
+        match_keyword(Keyword::Int, tokens)?;
+        arguments.push(match_identifier(tokens)?);
+        match tokens.peek() {
+            Some(&Token::CloseParen) => break,
+            _ => {
+                match_token(Token::Comma, tokens)?;
+            }
+        }
+    }
+    Ok(arguments)
+}
+
 fn parse_function(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Function, String> {
     match_keyword(Keyword::Int, tokens)?;
     let name = match_identifier(tokens)?;
     match_token(Token::OpenParen, tokens)?;
 
-//        TODO function arguments
+    let arguments: Vec<String> = match tokens.peek() {
+        Some(&Token::CloseParen) => vec![],
+        _ => parse_arguments(tokens).expect("Failed to parse function arguments"),
+    };
 
     match_token(Token::CloseParen, tokens)?;
     match_token(Token::OpenBrace, tokens)?;
 
     let mut statements = vec![];
-    let arguments = vec![];
     let mut variables: HashSet<String> = HashSet::new();
     loop {
         if let Some(&Token::CloseBrace) = tokens.peek() {
