@@ -83,6 +83,45 @@ fn next_token(tokens: &mut Peekable<IntoIter<Token>>) -> Token {
     }.expect("failed to parse")
 }
 
+fn match_token(token: Token, tokens: &mut Peekable<IntoIter<Token>>) -> Result<Token, String> {
+    let t = next_token(tokens);
+    match t {
+        _ if t == token => Ok((t)),
+        other => Err(format!("Expected {:?}, found {:?}", token, other))
+    }
+}
+
+fn match_keyword(keyword: &str, tokens: &mut Peekable<IntoIter<Token>>) -> Result<(), String> {
+    let token = next_token(tokens);
+    match token {
+        Token::Keyword(ref word) if word == keyword => Ok(()),
+        other => Err(format!("Expected SemiColon, found {:?}", other))
+    }
+}
+
+fn match_identifier(tokens: &mut Peekable<IntoIter<Token>>) -> Result<String, String> {
+    match next_token(tokens) {
+        Token::Identifier(n) => Ok((n)),
+        other => Err(format!("Expected Identifier, found {:?}", other))
+    }
+}
+
+fn parse_function2(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Function, String> {
+    match_keyword("int", tokens)?;
+
+    let name = match_identifier(tokens)?;
+
+    match_token(Token::OpenParen, tokens)?;
+    match_token(Token::CloseParen, tokens)?;
+    match_token(Token::OpenBrace, tokens)?;
+
+    let statement = parse_statement(tokens);
+
+    match_token(Token::CloseBrace, tokens)?;
+
+    Ok(Function { name, statement })
+}
+
 fn parse_function(tokens: &mut Peekable<IntoIter<Token>>) -> Function {
     match next_token(tokens) {
         Token::Keyword(ref word) if word == "int" => Ok(()),
