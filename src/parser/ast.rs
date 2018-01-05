@@ -1,4 +1,6 @@
 use super::token::Token;
+use super::token::Keyword;
+
 use std::vec::IntoIter;
 use std::iter::Peekable;
 use std::collections::HashSet;
@@ -67,7 +69,7 @@ pub fn parse_program(tokens: &mut Peekable<IntoIter<Token>>) -> Program {
     let globals = HashSet::new();
     loop {
         match tokens.peek() {
-            Some(_) => functions.push(parse_function(tokens)),
+            Some(_) => functions.push(parse_function(tokens).expect("Failed to parse function")),
             None => break
         }
     }
@@ -83,59 +85,65 @@ fn next_token(tokens: &mut Peekable<IntoIter<Token>>) -> Token {
     }.expect("failed to parse")
 }
 
-fn parse_function(tokens: &mut Peekable<IntoIter<Token>>) -> Function {
-    match next_token(tokens) {
-        Token::Keyword(ref word) if word == "int" => Ok(()),
-        other => Err(format!("Expected Keyword int, found {:?}", other))
-    }.and_then(|_| {
-        match next_token(tokens) {
-            Token::Identifier(n) => Ok(n),
-            other => Err(format!("Expected name, found {:?}", other))
-        }
-    }).and_then(|name| {
-        match next_token(tokens) {
-            Token::OpenParen => Ok(name),
-            other => Err(format!("Expected OpenParen, found {:?}", other))
-        }
-//        TODO function arguments
-    }).and_then(|name| {
-        match next_token(tokens) {
-            Token::CloseParen => Ok(name),
-            other => Err(format!("Expected CloseParen, found {:?}", other))
-        }
-    }).and_then(|name| {
-        match next_token(tokens) {
-            Token::OpenBrace => Ok(name),
-            other => Err(format!("Expected OpenBrace, found {:?}", other))
-        }
-    }).and_then(|name| {
-        let mut statements = vec![];
-        let arguments = vec![];
-        let mut variables: HashSet<String> = HashSet::new();
-        loop {
-            if let Some(&Token::CloseBrace) = tokens.peek() {
-                tokens.next();
-                break
-            } else {
-                let statement = parse_statement(tokens);
-                if let Statement::Declare(ref name, _) = statement {
-                    if variables.contains(name) {
-                        return Err(format!("Variable alreay defined: {}", name))
-                    } else {
-                        variables.insert(name.clone());
-                    }
-                }
-                statements.push(statement);
-            }
-        }
+fn match_token(token: Token, tokens: &mut Peekable<IntoIter<Token>>) -> Result<Token, String> {
+    let t = next_token(tokens);
+    match t {
+        _ if t == token => Ok((t)),
+        other => Err(format!("Expected {:?}, found {:?}", token, other))
+    }
+}
 
-        Ok(Function { name, arguments, statements, variables: variables.into_iter().collect() })
-    }).expect("failed to parse")
+fn match_keyword(keyword: Keyword, tokens: &mut Peekable<IntoIter<Token>>) -> Result<(), String> {
+    let token = next_token(tokens);
+    match token {
+        Token::Keyword(ref k) if k == &keyword => Ok(()),
+        other => Err(format!("Expected SemiColon, found {:?}", other))
+    }
+}
+
+fn match_identifier(tokens: &mut Peekable<IntoIter<Token>>) -> Result<String, String> {
+    match next_token(tokens) {
+        Token::Identifier(n) => Ok((n)),
+        other => Err(format!("Expected Identifier, found {:?}", other))
+    }
+}
+
+fn parse_function(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Function, String> {
+    match_keyword(Keyword::Int, tokens)?;
+    let name = match_identifier(tokens)?;
+    match_token(Token::OpenParen, tokens)?;
+
+//        TODO function arguments
+
+    match_token(Token::CloseParen, tokens)?;
+    match_token(Token::OpenBrace, tokens)?;
+
+    let mut statements = vec![];
+    let arguments = vec![];
+    let mut variables: HashSet<String> = HashSet::new();
+    loop {
+        if let Some(&Token::CloseBrace) = tokens.peek() {
+            tokens.next();
+            break
+        } else {
+            let statement = parse_statement(tokens);
+            if let Statement::Declare(ref name, _) = statement {
+                if variables.contains(name) {
+                    return Err(format!("Variable alreay defined: {}", name))
+                } else {
+                    variables.insert(name.clone());
+                }
+            }
+            statements.push(statement);
+        }
+    }
+
+    Ok(Function { name, arguments, statements, variables: variables.into_iter().collect() })
 }
 
 fn parse_statement(tokens: &mut Peekable<IntoIter<Token>>) -> Statement {
     let state: Statement = match tokens.next() {
-        Some(Token::Keyword(ref word)) if word == "int" => {
+        Some(Token::Keyword(Keyword::Int)) => {
             let name = match (next_token(tokens), next_token(tokens)) {
                 (Token::Identifier(n), Token::Assign) => Ok(n),
                 other => Err(format!("Expected name =, found {:?}", other))
@@ -144,7 +152,7 @@ fn parse_statement(tokens: &mut Peekable<IntoIter<Token>>) -> Statement {
             let exp = parse_expression(tokens);
             Ok(Statement::Declare(name, exp))
         }
-        Some(Token::Keyword(ref word)) if word == "return" => {
+        Some(Token::Keyword(Keyword::Return)) => {
             let exp = parse_expression(tokens);
             Ok(Statement::Return(exp))
         },

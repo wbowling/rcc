@@ -1,6 +1,5 @@
 extern crate itertools;
 use self::itertools::Itertools;
-use std::ascii::AsciiExt;
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -42,13 +41,19 @@ impl<'a> TokenParser<'a> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
+pub enum Keyword {
+    Int,
+    Return
+}
+
+#[derive(Debug, Eq, PartialEq)]
 pub enum Token {
     OpenBrace,
     CloseBrace,
     OpenParen,
     CloseParen,
     SemiColon,
-    Keyword(String),
+    Keyword(Keyword),
     Identifier(String),
     Literal(u32),
     BitComp,
@@ -89,10 +94,11 @@ pub fn lex(contents: String) -> Vec<Token> {
                     ';' => tokens.push(Token::SemiColon),
                     ' ' | '\t' | '\n' | '\r' => tokens.drop(),
                     'a'...'z' | 'A'...'Z' => {
-                        let word = tokens.get_string(|x| x.is_ascii() && x.is_alphanumeric());
-                        match is_keyword(&word) {
-                            true =>  tokens.push_back(Token::Keyword(word)),
-                            false => tokens.push_back(Token::Identifier(word))
+                        let word: &str = &tokens.get_string(|x| x.is_ascii() && x.is_alphanumeric());
+                        match word {
+                            "int" =>  tokens.push_back(Token::Keyword(Keyword::Int)),
+                            "return" => tokens.push_back(Token::Keyword(Keyword::Return)),
+                            _ => tokens.push_back(Token::Identifier(word.to_string()))
                         }
                     },
                     '0'...'9' => {
@@ -133,9 +139,4 @@ pub fn lex(contents: String) -> Vec<Token> {
         }
     }
     tokens.tokens
-}
-
-fn is_keyword(word: &str) -> bool {
-    let keywords = ["int", "return"];
-    keywords.contains(&word)
 }
