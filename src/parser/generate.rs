@@ -52,20 +52,7 @@ fn gen_function(fun: Function) -> Assembly {
     let mut asm = Assembly::new();
     match fun {
         Function { name, arguments, statements, variables } => {
-            let mut var_map: HashMap<String, i32> = HashMap::new();
-
-            let mut i = 8;
-
-            for var in arguments {
-                var_map.insert(var, i);
-                i += 4;
-            }
-
-            i = -4;
-            for var in variables {
-                var_map.insert(var, i);
-                i -= 4;
-            }
+            let var_map = get_var_map(arguments, variables);
 
             asm.add(format!(".global _{0}", name));
             asm.add(format!("_{0}:", name));
@@ -278,4 +265,23 @@ fn gen_expression(exp: Expression, var_map: &HashMap<String, i32>) -> Assembly {
 
 fn stack_size(var_map: &HashMap<String, i32>) -> i32 {
     16 + var_map.values().max().unwrap_or(&0)
+}
+
+fn get_var_map(arguments: Vec<String>, variables: Vec<String>) -> HashMap<String, i32>{
+    let mut var_map: HashMap<String, i32> = HashMap::new();
+
+    let mut i = 8;
+
+    for var in arguments {
+        var_map.insert(var, i);
+        i += 4;
+    }
+
+    i = -4;
+    for var in variables {
+        var_map.insert(var, i);
+        i -= 4;
+    }
+
+    var_map
 }
