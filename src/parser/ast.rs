@@ -195,7 +195,13 @@ fn parse_factor(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
                 _ => Expression::Variable(name)
             }
 
-        }
+        },
+        Some(Token::BitwiseAnd) => {
+            match tokens.next() {
+                Some(Token::Identifier(name)) => Expression::VariableRef(name),
+                other => panic!("Only variables support &, found token: {:?}", other)
+            }
+        },
         op @ _ => panic!("Unknown token: {:?}", op)
 
     }

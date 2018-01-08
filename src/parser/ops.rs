@@ -21,6 +21,7 @@ pub enum Expression {
     Int(u32),
     FunctionCall(String, Vec<Expression>),
     Variable(String),
+    VariableRef(String),
 }
 
 #[derive(Debug)]

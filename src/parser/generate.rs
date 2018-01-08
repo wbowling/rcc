@@ -251,6 +251,9 @@ fn gen_expression(exp: Expression, var_map: &HashMap<String, i32>) -> Assembly {
         Expression::Variable(name) => {
             asm.add(format!("movl {}(%ebp), %eax", var_map.get(&name).expect("variable not found")))
         },
+        Expression::VariableRef(name) => {
+            asm.add(format!("leal {}(%ebp), %eax", var_map.get(&name).expect("variable not found")))
+        },
         Expression::FunctionCall(name, arguments) => {
             let restore_size = 4 * arguments.len();
             for exp in arguments.into_iter().rev() {
