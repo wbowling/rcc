@@ -42,7 +42,7 @@ fn parse_function(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Function, St
         } else {
             let statement = parse_statement(tokens);
             if let Statement::Declare(ref name, _) = statement {
-                if variables.contains(name) {
+                if variables.contains(name) || arguments.contains(name) {
                     return Err(format!("Variable alreay defined: {}", name))
                 } else {
                     variables.insert(name.clone());
@@ -231,7 +231,12 @@ fn parse_arguments(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Vec<String>
     let mut arguments = vec![];
     loop {
         match_keyword(Keyword::Int, tokens)?;
-        arguments.push(match_identifier(tokens)?);
+        let name = match_identifier(tokens)?;
+        if arguments.contains(&name) {
+            return Err(format!("Argument {} already defined", name))
+        } else {
+            arguments.push(name);
+        }
         match tokens.peek() {
             Some(&Token::CloseParen) => break,
             _ => {
