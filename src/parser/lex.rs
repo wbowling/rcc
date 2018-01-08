@@ -22,8 +22,12 @@ pub fn lex(contents: String) -> Vec<Token> {
                         }
                     },
                     '0'...'9' => {
-                        let word = tokens.get_string(|x| x.is_ascii() && x.is_digit(10));
-                        let int: u32 = word.parse().expect("Not a number");
+                        let word = tokens.get_string(|x| x.is_ascii() && (x.is_digit(16) || x == &'x'));
+                        let int: u32 = if word.starts_with("0x") {
+                            u32::from_str_radix(&word[2..], 16).expect("Not a number")
+                        } else {
+                            word.parse().expect("Not a number")
+                        };
                         tokens.push_back(Token::Literal(int))
                     },
                     '-' => tokens.push(Token::Negation),
