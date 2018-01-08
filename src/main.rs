@@ -12,7 +12,7 @@ fn main() {
     let path = Path::new(&arg1);
 
     let contents = read_file(path);
-    let tokens = parser::token::lex(contents);
+    let tokens = parser::lex::lex(contents);
     println!("{:?}", tokens);
 
     let prog = parser::ast::parse_program(&mut tokens.into_iter().peekable());

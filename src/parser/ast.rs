@@ -1,68 +1,10 @@
 use super::token::Token;
 use super::token::Keyword;
+use super::ops::*;
 
 use std::vec::IntoIter;
 use std::iter::Peekable;
 use std::collections::HashSet;
-
-#[derive(Debug)]
-pub enum UnOp {
-    Negation,
-    BitComp,
-    LogicalNeg,
-}
-
-#[derive(Debug)]
-pub enum BinOp {
-    Addition,
-    Subtraction,
-    Multiplication,
-    Division,
-    Modulus,
-    LessThan,
-    LessThanOrEqual,
-    GreaterThan,
-    GreaterThanOrEqual,
-    Equal,
-    NotEqual,
-    And,
-    Or,
-    BitwiseLeft,
-    BitwiseRight,
-    BitwiseAnd,
-    BitwiseXor,
-    BitwiseOr,
-}
-
-#[derive(Debug)]
-pub struct Program {
-    pub func: Vec<Function>,
-    pub globals: Vec<String>
-}
-
-#[derive(Debug)]
-pub struct Function {
-    pub name: String,
-    pub arguments: Vec<String>,
-    pub statements: Vec<Statement>,
-    pub variables: Vec<String>
-}
-
-#[derive(Debug)]
-pub enum Expression {
-    BinOp(BinOp, Box<Expression>, Box<Expression>),
-    UnOp(UnOp, Box<Expression>),
-    Int(u32),
-    FunctionCall(String, Vec<Expression>),
-    Variable(String),
-}
-
-#[derive(Debug)]
-pub enum Statement {
-    Assign(String, Expression),
-    Declare(String, Expression),
-    Return(Expression),
-}
 
 pub fn parse_program(tokens: &mut Peekable<IntoIter<Token>>) -> Program {
     let mut functions = Vec::new();
@@ -76,51 +18,6 @@ pub fn parse_program(tokens: &mut Peekable<IntoIter<Token>>) -> Program {
 
     if tokens.next().is_some() { panic!("Should be at the end") };
     Program { func: functions, globals: globals.into_iter().collect() }
-}
-
-fn next_token(tokens: &mut Peekable<IntoIter<Token>>) -> Token {
-    match tokens.next() {
-        Some(token) => Ok(token),
-        _ => Err("Token not found")
-    }.expect("failed to parse")
-}
-
-fn match_token(token: Token, tokens: &mut Peekable<IntoIter<Token>>) -> Result<Token, String> {
-    let t = next_token(tokens);
-    match t {
-        _ if t == token => Ok((t)),
-        other => Err(format!("Expected {:?}, found {:?}", token, other))
-    }
-}
-
-fn match_keyword(keyword: Keyword, tokens: &mut Peekable<IntoIter<Token>>) -> Result<(), String> {
-    let token = next_token(tokens);
-    match token {
-        Token::Keyword(ref k) if k == &keyword => Ok(()),
-        other => Err(format!("Expected SemiColon, found {:?}", other))
-    }
-}
-
-fn match_identifier(tokens: &mut Peekable<IntoIter<Token>>) -> Result<String, String> {
-    match next_token(tokens) {
-        Token::Identifier(n) => Ok((n)),
-        other => Err(format!("Expected Identifier, found {:?}", other))
-    }
-}
-
-fn parse_arguments(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Vec<String>, String> {
-    let mut arguments = vec![];
-    loop {
-        match_keyword(Keyword::Int, tokens)?;
-        arguments.push(match_identifier(tokens)?);
-        match tokens.peek() {
-            Some(&Token::CloseParen) => break,
-            _ => {
-                match_token(Token::Comma, tokens)?;
-            }
-        }
-    }
-    Ok(arguments)
 }
 
 fn parse_function(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Function, String> {
@@ -287,7 +184,7 @@ fn parse_factor(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
         },
         Some(op @ Token::Negation) | Some(op @ Token::LogicalNeg) | Some(op @ Token::BitComp) => {
             let factor = parse_factor(tokens);
-            Expression::UnOp(convert_unop(op), Box::new(factor))
+            Expression::UnOp(op.into(), Box::new(factor))
         },
         Some(Token::Literal(num)) => {
             Expression::Int(num)
@@ -330,6 +227,21 @@ fn parse_function_arguments(tokens: &mut Peekable<IntoIter<Token>>) -> Vec<Expre
     arguments
 }
 
+fn parse_arguments(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Vec<String>, String> {
+    let mut arguments = vec![];
+    loop {
+        match_keyword(Keyword::Int, tokens)?;
+        arguments.push(match_identifier(tokens)?);
+        match tokens.peek() {
+            Some(&Token::CloseParen) => break,
+            _ => {
+                match_token(Token::Comma, tokens)?;
+            }
+        }
+    }
+    Ok(arguments)
+}
+
 fn parse_gen_experssion<F>(tokens: &mut Peekable<IntoIter<Token>>, matching: Vec<Token>, next: F) -> Expression
     where F: Fn(&mut Peekable<IntoIter<Token>>) -> Expression {
     let mut term = next(tokens);
@@ -337,7 +249,7 @@ fn parse_gen_experssion<F>(tokens: &mut Peekable<IntoIter<Token>>, matching: Vec
     loop {
         match tokens.peek().map(|c| matching.contains(c)) {
             Some(true) => {
-                let op = convert_binop(tokens.next());
+                let op = tokens.next().unwrap().into();
                 let next_term = next(tokens);
                 term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
             },
@@ -347,35 +259,32 @@ fn parse_gen_experssion<F>(tokens: &mut Peekable<IntoIter<Token>>, matching: Vec
     term
 }
 
-fn convert_binop(token: Option<Token>) -> BinOp {
-    match token {
-        Some(Token::Multiplication) => BinOp::Multiplication,
-        Some(Token::Division) => BinOp::Division,
-        Some(Token::Modulus) => BinOp::Modulus,
-        Some(Token::Addition) => BinOp::Addition,
-        Some(Token::Negation) => BinOp::Subtraction,
-        Some(Token::LessThan) => BinOp::LessThan,
-        Some(Token::LessThanOrEqual) => BinOp::LessThanOrEqual,
-        Some(Token::GreaterThan) => BinOp::GreaterThan,
-        Some(Token::GreaterThanOrEqual) => BinOp::GreaterThanOrEqual,
-        Some(Token::Equal) => BinOp::Equal,
-        Some(Token::NotEqual) => BinOp::NotEqual,
-        Some(Token::And) => BinOp::And,
-        Some(Token::Or) => BinOp::Or,
-        Some(Token::BitwiseLeft) => BinOp::BitwiseLeft,
-        Some(Token::BitwiseRight) => BinOp::BitwiseRight,
-        Some(Token::BitwiseAnd) => BinOp::BitwiseAnd,
-        Some(Token::BitwiseXor) => BinOp::BitwiseXor,
-        Some(Token::BitwiseOr) => BinOp::BitwiseOr,
-        _ => panic!("Unsupported token {:?}")
+fn next_token(tokens: &mut Peekable<IntoIter<Token>>) -> Token {
+    match tokens.next() {
+        Some(token) => Ok(token),
+        _ => Err("Token not found")
+    }.expect("failed to parse")
+}
+
+fn match_token(token: Token, tokens: &mut Peekable<IntoIter<Token>>) -> Result<Token, String> {
+    let t = next_token(tokens);
+    match t {
+        _ if t == token => Ok((t)),
+        other => Err(format!("Expected {:?}, found {:?}", token, other))
     }
 }
 
-fn convert_unop(token: Token) -> UnOp {
+fn match_keyword(keyword: Keyword, tokens: &mut Peekable<IntoIter<Token>>) -> Result<(), String> {
+    let token = next_token(tokens);
     match token {
-        Token::Negation => UnOp::Negation,
-        Token::LogicalNeg => UnOp::LogicalNeg,
-        Token::BitComp => UnOp::BitComp,
-        _ => panic!("Unsupported token {:?}, can only use: ! ~ -")
+        Token::Keyword(ref k) if k == &keyword => Ok(()),
+        other => Err(format!("Expected SemiColon, found {:?}", other))
+    }
+}
+
+fn match_identifier(tokens: &mut Peekable<IntoIter<Token>>) -> Result<String, String> {
+    match next_token(tokens) {
+        Token::Identifier(n) => Ok((n)),
+        other => Err(format!("Expected Identifier, found {:?}", other))
     }
 }
