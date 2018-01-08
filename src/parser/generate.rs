@@ -52,13 +52,14 @@ fn gen_function(fun: Function) -> Assembly {
     let mut asm = Assembly::new();
     match fun {
         Function { name, arguments, statements, variables } => {
+            let stack_size = variables.len() * 4;
             let var_map = get_var_map(arguments, variables);
 
             asm.add(format!(".global _{0}", name));
             asm.add(format!("_{0}:", name));
             asm.add("pushl %ebp");
             asm.add("movl %esp, %ebp");
-            asm.add(format!("subl	${}, %esp", stack_size(&var_map)));
+            asm.add(format!("subl ${}, %esp", stack_size));
 
             for statement in statements {
                 asm.add(gen_statement(statement, &var_map));
@@ -75,7 +76,7 @@ fn gen_statement(stat: Statement, var_map: &HashMap<String, i32>) -> Assembly {
     match stat {
         Statement::Return(exp) => {
             asm.add(gen_expression(exp, var_map));
-            asm.add(format!("addl	${}, %esp", stack_size(var_map)));
+            asm.add("mov	%ebp, %esp");
             asm.add("popl %ebp");
             asm.add("ret\n");
         }
@@ -251,20 +252,16 @@ fn gen_expression(exp: Expression, var_map: &HashMap<String, i32>) -> Assembly {
             asm.add(format!("movl {}(%ebp), %eax", var_map.get(&name).expect("variable not found")))
         },
         Expression::FunctionCall(name, arguments) => {
-            let mut i = -4;
-            for exp in arguments {
-                i += 4;
+            let restore_size = 4 * arguments.len();
+            for exp in arguments.into_iter().rev() {
                 asm.add(gen_expression(exp, var_map));
-                asm.add(format!("movl %eax, {}(%esp)", i));
+                asm.add("push %eax");
             }
             asm.add(format!("call _{}", name));
+            asm.add(format!("addl ${}, %esp", restore_size));
         }
     }
     asm
-}
-
-fn stack_size(var_map: &HashMap<String, i32>) -> i32 {
-    16 + var_map.values().max().unwrap_or(&0)
 }
 
 fn get_var_map(arguments: Vec<String>, variables: Vec<String>) -> HashMap<String, i32>{
