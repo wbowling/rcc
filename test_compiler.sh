@@ -14,7 +14,7 @@ success_total=0
 failure_total=0
 
 num_stages=4
-for i in `seq 1 $num_stages`; do
+for i in `seq 0 $num_stages`; do
     success=0
     fail=0
     echo "===================================================="
