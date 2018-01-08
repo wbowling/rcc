@@ -80,10 +80,12 @@ fn gen_statement(stat: Statement, var_map: &HashMap<String, i32>) -> Assembly {
             asm.add("popl %ebp");
             asm.add("ret\n");
         }
-        Statement::Declare(name, exp) | Statement::Assign(name, exp) => {
+        Statement::Declare(name, Some(exp)) => {
             asm.add(gen_expression(exp, var_map));
             asm.add(format!("movl %eax, {}(%ebp)", var_map.get(&name).expect("Variable not found")));
         },
+        Statement::Exp(exp) =>asm.add(gen_expression(exp, var_map)),
+        Statement::Declare(_, None) => (),
     }
     asm
 }
@@ -262,7 +264,11 @@ fn gen_expression(exp: Expression, var_map: &HashMap<String, i32>) -> Assembly {
             }
             asm.add(format!("call _{}", name));
             asm.add(format!("addl ${}, %esp", restore_size));
-        }
+        },
+        Expression::Assign(name, exp) => {
+            asm.add(gen_expression(*exp, var_map));
+            asm.add(format!("movl %eax, {}(%ebp)", var_map.get(&name).expect("Variable not found")));
+        },
     }
     asm
 }

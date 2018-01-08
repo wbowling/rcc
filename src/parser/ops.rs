@@ -22,13 +22,14 @@ pub enum Expression {
     FunctionCall(String, Vec<Expression>),
     Variable(String),
     VariableRef(String),
+    Assign(String, Box<Expression>),
 }
 
 #[derive(Debug)]
 pub enum Statement {
-    Assign(String, Expression),
-    Declare(String, Expression),
+    Declare(String, Option<Expression>),
     Return(Expression),
+    Exp(Expression),
 }
 
 #[derive(Debug)]

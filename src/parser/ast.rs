@@ -56,33 +56,39 @@ fn parse_function(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Function, St
 }
 
 fn parse_statement(tokens: &mut Peekable<IntoIter<Token>>) -> Statement {
-    let state: Statement = match tokens.next() {
-        Some(Token::Keyword(Keyword::Int)) => {
-            let name = match (next_token(tokens), next_token(tokens)) {
-                (Token::Identifier(n), Token::Assign) => Ok(n),
-                other => Err(format!("Expected name =, found {:?}", other))
-            }.expect("failed to parse");
+    let other = match tokens.peek() {
+        Some(&Token::Keyword(Keyword::Int))
+        | Some(&Token::Keyword(Keyword::Return)) => false,
+        _ => true
+    };
 
-            let exp = parse_expression(tokens);
-            Ok(Statement::Declare(name, exp))
-        }
-        Some(Token::Keyword(Keyword::Return)) => {
-            let exp = parse_expression(tokens);
-            Ok(Statement::Return(exp))
-        },
-        Some(Token::Identifier(name)) => {
-            match tokens.next() {
-                Some(Token::Assign) => {
+    let state: Statement = if other {
+        let exp = parse_expression(tokens);
+        Ok(Statement::Exp(exp))
+    } else {
+        match tokens.next() {
+            Some(Token::Keyword(Keyword::Int)) => {
+                let name = match next_token(tokens) {
+                    Token::Identifier(n) => Ok(n),
+                    other => Err(format!("Expected identifier, found {:?}", other))
+                }.expect("failed to parse");
+
+                if let Some(&Token::SemiColon) = tokens.peek() {
+                    Ok(Statement::Declare(name, None))
+                } else if let Some(Token::Assign) = tokens.next() {
                     let exp = parse_expression(tokens);
-                    Ok(Statement::Assign(name, exp))
-                },
-                other => Err(format!("Expected Assign, found {:?}", other))
+                    Ok(Statement::Declare(name, Some(exp)))
+                } else {
+                    Err(format!("Expected SemiColon or Assign"))
+                }
             }
-        },
-        other => Err(format!("Expected return, found {:?}", other))
+            Some(Token::Keyword(Keyword::Return)) => {
+                let exp = parse_expression(tokens);
+                Ok(Statement::Return(exp))
+            },
+            o => Err(format!("Error, found {:?}", o))
+        }
     }.expect("failed to parse");
-
-
 
     let res = match tokens.next() {
         Some(Token::SemiColon) => Ok(state),
@@ -192,6 +198,10 @@ fn parse_factor(tokens: &mut Peekable<IntoIter<Token>>) -> Expression {
         Some(Token::Identifier(name)) => {
             match tokens.peek() {
                 Some(&Token::OpenParen) => Expression::FunctionCall(name, parse_function_arguments(tokens)),
+                Some(&Token::Assign) => {
+                    tokens.next();
+                    Expression::Assign(name, Box::new(parse_expression(tokens)))
+                }
                 _ => Expression::Variable(name)
             }
 
