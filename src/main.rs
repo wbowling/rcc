@@ -1,3 +1,5 @@
+extern crate itertools;
+
 use std::fs::File;
 use std::io::prelude::*;
 use std::env;
@@ -15,7 +17,7 @@ fn main() {
     let tokens = parser::lex::lex(contents);
     println!("{:?}", tokens);
 
-    let prog = parser::ast::parse_program(&mut tokens.into_iter().peekable());
+    let prog = parser::ast::parse_program(&mut itertools::multipeek(tokens.into_iter()));
     println!("{:?}", prog);
 
     let asm = parser::generate::generate(prog);

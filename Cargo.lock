@@ -5,7 +5,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "itertools"
-version = "0.7.3"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "either 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -15,9 +15,9 @@ dependencies = [
 name = "rcc"
 version = "0.1.0"
 dependencies = [
- "itertools 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "itertools 0.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [metadata]
 "checksum either 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "740178ddf48b1a9e878e6d6509a1442a2d42fd2928aae8e7a6f8a36fb01981b3"
-"checksum itertools 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)" = "99f3f75d7cf195a7eedb0611efe8684b55c6c7264afe3d8bc00b704f061c0fdf"
+"checksum itertools 0.7.5 (registry+https://github.com/rust-lang/crates.io-index)" = "a3f195c9c60b8d747d73357694c3ebcaeb229ea574bd92999260954f851d59c2"
