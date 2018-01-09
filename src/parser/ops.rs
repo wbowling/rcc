@@ -14,7 +14,7 @@ pub struct Function {
     pub variables: Vec<String>
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Expression {
     BinOp(BinOp, Box<Expression>, Box<Expression>),
     UnOp(UnOp, Box<Expression>),
@@ -25,21 +25,21 @@ pub enum Expression {
     Assign(String, Box<Expression>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Statement {
     Declare(String, Option<Expression>),
     Return(Expression),
     Exp(Expression),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum UnOp {
     Negation,
     BitComp,
     LogicalNeg,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum BinOp {
     Addition,
     Subtraction,
