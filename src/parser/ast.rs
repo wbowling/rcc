@@ -27,6 +27,10 @@ impl Parser {
         self.tokens.peek()
     }
 
+    fn peek_more(&mut self) -> Option<&Token> {
+        self.tokens.peek()
+    }
+
     fn next(&mut self) -> Option<Token> {
         self.tokens.next()
     }
@@ -134,7 +138,7 @@ impl Parser {
 
     fn parse_expression(&mut self, variables: &Vec<&String>) -> Expression {
         let ident = if let Some(&Token::Identifier(_)) = self.peek() { true } else { false };
-        let assign = if let Some(&Token::Assign) = self.peek() { true } else { false };
+        let assign = if let Some(&Token::Assign) = self.peek_more() { true } else { false };
         if ident && assign {
             match (self.next(), self.next()) {
                 (Some(Token::Identifier(name)), Some(Token::Assign)) => {
