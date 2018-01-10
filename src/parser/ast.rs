@@ -1,3 +1,4 @@
+
 extern crate itertools;
 
 use super::token::Token;
@@ -11,46 +12,95 @@ use itertools::chain;
 
 pub struct Parser {
     tokens: MultiPeek<IntoIter<Token>>,
+    peeked: Vec<Option<Token>>
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Parser {
-        Parser { tokens:  itertools::multipeek(tokens) }
+        Parser { tokens: itertools::multipeek(tokens), peeked: vec![] }
     }
 
     pub fn parse(&mut self) -> Program {
         self.parse_program()
     }
 
-    fn peek(&mut self) -> Option<&Token> {
-        self.tokens.reset_peek();
-        self.tokens.peek()
+    fn peek(&mut self) -> &Option<Token> {
+        if self.peeked.is_empty() {
+            let b = self.tokens.next();
+            self.peeked.push(b);
+        }
+        self.peeked.first().unwrap_or(&None)
     }
 
-    fn peek_more(&mut self) -> Option<&Token> {
-        self.tokens.peek()
+    fn drop(&mut self, count: usize) {
+        for _ in 0..count {
+            self.next();
+        }
+    }
+
+    fn peek_2(&mut self) -> (Option<Token>, Option<Token>) {
+        let s = self.peek_many(2);
+        (s[0].clone(), s[1].clone())
+    }
+
+    fn peek_many(&mut self, count: usize) -> &[Option<Token>] {
+        while self.peeked.len() < count {
+            let b = self.tokens.next();
+            self.peeked.push(b);
+        }
+        self.peeked.get(0..count).unwrap()
     }
 
     fn next(&mut self) -> Option<Token> {
-        self.tokens.next()
+        if self.peeked.is_empty() {
+            self.tokens.next()
+        } else {
+            self.peeked.remove(0)
+        }
     }
 
     fn is_empty(&mut self) -> bool {
-        self.tokens.reset_peek();
         match self.peek() {
-            Some(_) => false,
+            &Some(_) => false,
             _ => true,
         }
     }
 
+    fn next_token(&mut self) -> Token {
+        self.next().expect("failed to parse")
+    }
 
+    fn match_token(&mut self, token: Token) -> Result<Token, String> {
+        match self.next_token() {
+            ref t if t == &token => Ok(token),
+            other => Err(format!("Token {:?} not found, found {:?}", token, other))
+        }
+    }
+
+    fn match_keyword(&mut self, keyword: Keyword) -> Result<(), String> {
+        let token = self.next_token();
+        match token {
+            Token::Keyword(ref k) if k == &keyword => Ok(()),
+            other => Err(format!("Expected SemiColon, found {:?}", other))
+        }
+    }
+
+    fn match_identifier(&mut self) -> Result<String, String> {
+        match self.next_token() {
+            Token::Identifier(n) => Ok((n)),
+            other => Err(format!("Expected Identifier, found {:?}", other))
+        }
+    }
+}
+
+impl Parser {
     fn parse_program(&mut self) -> Program {
         let mut functions = Vec::new();
         let globals = Vec::new();
         loop {
             match self.peek() {
-                Some(_) => functions.push(self.parse_function().expect("Failed to parse function")),
-                None => break
+                &Some(_) => functions.push(self.parse_function().expect("Failed to parse function")),
+                &None => break
             }
         }
 
@@ -64,7 +114,7 @@ impl Parser {
         self.match_token(Token::OpenParen)?;
 
         let arguments: Vec<String> = match self.peek() {
-            Some(&Token::CloseParen) => Vec::new(),
+            &Some(Token::CloseParen) => Vec::new(),
             _ => self.parse_arguments().expect("Failed to parse function arguments"),
         };
 
@@ -74,7 +124,7 @@ impl Parser {
         let mut statements = vec![];
         let mut variables: Vec<String> = Vec::new();
         loop {
-            if let Some(&Token::CloseBrace) = self.peek() {
+            if let &Some(Token::CloseBrace) = self.peek() {
                 self.next();
                 break
             } else {
@@ -95,8 +145,8 @@ impl Parser {
 
     fn parse_statement(&mut self, variables: &Vec<&String>) -> Statement {
         let other = match self.peek() {
-            Some(&Token::Keyword(Keyword::Int))
-            | Some(&Token::Keyword(Keyword::Return)) => false,
+            &Some(Token::Keyword(Keyword::Int))
+            | &Some(Token::Keyword(Keyword::Return)) => false,
             _ => true
         };
 
@@ -111,7 +161,7 @@ impl Parser {
                         other => Err(format!("Expected identifier, found {:?}", other))
                     }.expect("failed to parse");
 
-                    if let Some(&Token::SemiColon) = self.peek() {
+                    if let &Some(Token::SemiColon) = self.peek() {
                         Ok(Statement::Declare(name, None))
                     } else if let Some(Token::Assign) = self.next() {
                         let exp = self.parse_expression(variables);
@@ -137,22 +187,17 @@ impl Parser {
     }
 
     fn parse_expression(&mut self, variables: &Vec<&String>) -> Expression {
-        let ident = if let Some(&Token::Identifier(_)) = self.peek() { true } else { false };
-        let assign = if let Some(&Token::Assign) = self.peek_more() { true } else { false };
-        if ident && assign {
-            match (self.next(), self.next()) {
-                (Some(Token::Identifier(name)), Some(Token::Assign)) => {
-                    if variables.contains(&&name) {
-                        let exp = self.parse_expression(variables);
-                        Expression::Assign(name, Box::new(exp))
-                    } else {
-                        panic!("Variable {} not defined", name)
-                    }
-                },
-                _ => panic!("Should not be here")
-            }
-        } else {
-            self.parse_or_expression(variables)
+        match self.peek_2() {
+            (Some(Token::Identifier(name)), Some(Token::Assign)) => {
+                self.drop(2);
+                if variables.contains(&&name) {
+                    let exp = self.parse_expression(variables);
+                    Expression::Assign(name.clone(), Box::new(exp))
+                } else {
+                    panic!("Variable {} not defined", name)
+                }
+            },
+            _ => self.parse_or_expression(variables)
         }
     }
 
@@ -251,7 +296,7 @@ impl Parser {
             },
             Some(Token::Identifier(name)) => {
                 match self.peek() {
-                    Some(&Token::OpenParen) => Expression::FunctionCall(name, self.parse_function_arguments(variables)),
+                    &Some(Token::OpenParen) => Expression::FunctionCall(name, self.parse_function_arguments(variables)),
                     _ => Expression::Variable(name)
                 }
             },
@@ -276,17 +321,17 @@ impl Parser {
         let mut arguments = vec![];
         self.next();
         loop {
-            if let Some(&Token::CloseParen) = self.peek() {
+            if let &Some(Token::CloseParen) = self.peek() {
                 self.next();
                 break
             } else {
                 let exp = self.parse_expression(variables);
                 arguments.push(exp);
-                if let Some(&Token::CloseParen) = self.peek() {
+                if let &Some(Token::CloseParen) = self.peek() {
                     self.next();
                     break
                 } else {
-                    if let Some(&Token::Comma) = self.peek() {
+                    if let &Some(Token::Comma) = self.peek() {
                         self.next();
                     } else {
                         panic!("Invalid function call")
@@ -309,7 +354,7 @@ impl Parser {
                 arguments.push(name);
             }
             match self.peek() {
-                Some(&Token::CloseParen) => break,
+                &Some(Token::CloseParen) => break,
                 _ => {
                     self.match_token(Token::Comma)?;
                 }
@@ -323,45 +368,18 @@ impl Parser {
         let mut term = next(self, variables);
 
         loop {
-            match self.peek().map(|c| matching.contains(c)) {
-                Some(true) => {
-                    let op = self.next().unwrap().into();
-                    let next_term = next(self, variables);
-                    term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
-                },
-                _ => break
+            let found = match self.peek() {
+                &Some(ref a) => matching.contains(a),
+                _ => false
+            };
+            if found {
+                let op = self.next().unwrap().into();
+                let next_term = next(self, variables);
+                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
+            } else {
+                break
             }
         }
         term
-    }
-
-    fn next_token(&mut self) -> Token {
-        match self.next() {
-            Some(token) => Ok(token),
-            _ => Err("Token not found")
-        }.expect("failed to parse")
-    }
-
-    fn match_token(&mut self, token: Token) -> Result<Token, String> {
-        let t = self.next_token();
-        match t {
-            _ if t == token => Ok((t)),
-            other => Err(format!("Expected {:?}, found {:?}", token, other))
-        }
-    }
-
-    fn match_keyword(&mut self, keyword: Keyword) -> Result<(), String> {
-        let token = self.next_token();
-        match token {
-            Token::Keyword(ref k) if k == &keyword => Ok(()),
-            other => Err(format!("Expected SemiColon, found {:?}", other))
-        }
-    }
-
-    fn match_identifier(&mut self) -> Result<String, String> {
-        match self.next_token() {
-            Token::Identifier(n) => Ok((n)),
-            other => Err(format!("Expected Identifier, found {:?}", other))
-        }
     }
 }

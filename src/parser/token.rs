@@ -40,13 +40,13 @@ impl<'a> TokenParser<'a> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Keyword {
     Int,
     Return
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Token {
     OpenBrace,
     CloseBrace,
