@@ -17,7 +17,8 @@ fn main() {
     let tokens = parser::lex::lex(contents);
     println!("{:?}", tokens);
 
-    let prog = parser::ast::parse_program(&mut itertools::multipeek(tokens.into_iter()));
+    let mut parser = parser::ast::Parser::new(tokens);
+    let prog = parser.parse();
     println!("{:?}", prog);
 
     let asm = parser::generate::generate(prog);
