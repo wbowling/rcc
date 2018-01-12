@@ -9,7 +9,7 @@ pub struct TokenParser<'a> {
 }
 
 impl<'a> TokenParser<'a> {
-    pub fn new(source: &'a String) -> TokenParser<'a> {
+    pub fn new(source: &str) -> TokenParser {
         TokenParser { tokens: vec![], iter: source.chars().peekable() }
     }
 

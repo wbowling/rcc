@@ -14,7 +14,7 @@ fn main() {
     let path = Path::new(&arg1);
 
     let contents = read_file(path);
-    let tokens = parser::lex::lex(contents);
+    let tokens = parser::lex::lex(&contents);
     println!("{:?}", tokens);
 
     let mut parser = parser::ast::Parser::new(tokens);
@@ -28,7 +28,7 @@ fn main() {
     let mut new_path = parent.join(path.file_stem().expect("Cannot get stem"));
     new_path.set_extension("s");
 
-    write_file(&new_path, asm);
+    write_file(&new_path, &asm);
     compile(&new_path);
 }
 
@@ -40,7 +40,7 @@ fn read_file(path: &Path) -> String {
     contents
 }
 
-fn write_file(path: &PathBuf, contents: String) {
+fn write_file(path: &PathBuf, contents: &str) {
     let mut file = File::create(path).expect("Failed to open file for writing");
     file.write_all(contents.as_bytes()).expect("Failed to write to file");
 }

@@ -94,7 +94,7 @@ impl From<Token> for UnOp {
             Token::Negation => UnOp::Negation,
             Token::LogicalNeg => UnOp::LogicalNeg,
             Token::BitComp => UnOp::BitComp,
-            _ => panic!("Unsupported token {:?}, can only use: ! ~ -")
+            other => panic!("Unsupported token {:?}, can only use: ! ~ -", other)
         }
     }
 }

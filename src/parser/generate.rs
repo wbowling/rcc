@@ -61,7 +61,7 @@ fn gen_function(fun: Function) -> Assembly {
             asm.add("movl %esp, %ebp");
             asm.add(format!("subl ${}, %esp", stack_size));
 
-            let mut has_return: bool = statements.iter().any(|s| if let &Statement::Return(_) = s { true } else { false });
+            let mut has_return: bool = statements.iter().any(|s| if let Statement::Return(_) = *s { true } else { false });
             for statement in statements {
                 asm.add(gen_statement(statement, &var_map));
             }
