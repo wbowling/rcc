@@ -6,30 +6,40 @@ use super::token::Keyword;
 use super::ops::*;
 
 use std::vec::IntoIter;
+use std::iter::Peekable;
 
-use self::itertools::structs::MultiPeek;
 use itertools::chain;
 
+#[derive(Debug)]
 pub struct Parser {
-    tokens: MultiPeek<IntoIter<Token>>,
-    peeked: Vec<Option<Token>>
+    tokens: Peekable<IntoIter<Token>>,
+    peeked: Vec<Token>
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Parser {
-        Parser { tokens: itertools::multipeek(tokens), peeked: vec![] }
+        Parser { tokens: tokens.into_iter().peekable(), peeked: vec![] }
     }
 
     pub fn parse(&mut self) -> Program {
         self.parse_program()
     }
 
-    fn peek(&mut self) -> &Option<Token> {
+    fn next(&mut self) -> Option<Token> {
         if self.peeked.is_empty() {
-            let b = self.tokens.next();
-            self.peeked.push(b);
+            self.tokens.next()
+        } else {
+            self.peeked.pop()
         }
-        self.peeked.first().unwrap_or(&None)
+    }
+
+    fn peek(&mut self) -> Option<Token> {
+        if let Some(token) = self.next() {
+            self.push(Some(token.clone()));
+            Some(token)
+        } else {
+            None
+        }
     }
 
     fn drop(&mut self, count: usize) {
@@ -38,32 +48,14 @@ impl Parser {
         }
     }
 
-    fn peek_2(&mut self) -> (Option<Token>, Option<Token>) {
-        let s = self.peek_many(2);
-        (s[0].clone(), s[1].clone())
-    }
-
-    fn peek_many(&mut self, count: usize) -> &[Option<Token>] {
-        while self.peeked.len() < count {
-            let b = self.tokens.next();
-            self.peeked.push(b);
-        }
-        self.peeked.get(0..count).unwrap()
-    }
-
-    fn next(&mut self) -> Option<Token> {
-        if self.peeked.is_empty() {
-            self.tokens.next()
-        } else {
-            self.peeked.remove(0)
+    fn push(&mut self, token: Option<Token>) {
+        if let Some(t) = token {
+            self.peeked.push(t);
         }
     }
 
     fn is_empty(&mut self) -> bool {
-        match self.peek() {
-            &Some(_) => false,
-            _ => true,
-        }
+        self.peeked.is_empty() && self.tokens.peek().is_none()
     }
 
     fn next_token(&mut self) -> Token {
@@ -73,6 +65,13 @@ impl Parser {
     fn match_token(&mut self, token: Token) -> Result<Token, String> {
         match self.next_token() {
             ref t if t == &token => Ok(token),
+            other => Err(format!("Token {:?} not found, found {:?}", token, other))
+        }
+    }
+
+    fn peek_token(&mut self, token: Token) -> Result<Token, String> {
+        match self.peek() {
+            Some(ref t) if t == &token => Ok(token),
             other => Err(format!("Token {:?} not found, found {:?}", token, other))
         }
     }
@@ -97,14 +96,11 @@ impl Parser {
     fn parse_program(&mut self) -> Program {
         let mut functions = Vec::new();
         let globals = Vec::new();
-        loop {
-            match self.peek() {
-                &Some(_) => functions.push(self.parse_function().expect("Failed to parse function")),
-                &None => break
-            }
+
+        while !self.is_empty() {
+            functions.push(self.parse_function().expect("Failed to parse function"))
         }
 
-        if !self.is_empty() { panic!("Should be at the end") };
         Program { func: functions, globals: globals.into_iter().collect() }
     }
 
@@ -114,8 +110,8 @@ impl Parser {
         self.match_token(Token::OpenParen)?;
 
         let arguments: Vec<String> = match self.peek() {
-            &Some(Token::CloseParen) => Vec::new(),
-            _ => self.parse_arguments().expect("Failed to parse function arguments"),
+            Some(Token::CloseParen) => Vec::new(),
+            _ => self.parse_arguments().expect("Failed to parse function arguments")
         };
 
         self.match_token(Token::CloseParen)?;
@@ -123,58 +119,31 @@ impl Parser {
 
         let mut statements = vec![];
         let mut variables: Vec<String> = Vec::new();
-        loop {
-            if let &Some(Token::CloseBrace) = self.peek() {
-                self.next();
-                break
-            } else {
-                let statement = self.parse_statement(&chain(&variables, &arguments).collect());
-                if let Statement::Declare(ref name, _) = statement {
-                    if variables.contains(name) || arguments.contains(name) {
-                        return Err(format!("Variable alreay defined: {}", name))
-                    } else {
-                        variables.push(name.clone());
-                    }
+
+        while let Err(_) = self.peek_token(Token::CloseBrace) {
+            let statement = self.parse_statement(&chain(&variables, &arguments).collect());
+            if let Statement::Declare(ref name, _) = statement {
+                if variables.contains(name) || arguments.contains(name) {
+                    return Err(format!("Variable alreay defined: {}", name))
+                } else {
+                    variables.push(name.clone());
                 }
-                statements.push(statement);
             }
+            statements.push(statement);
         }
+
+        self.match_token(Token::CloseBrace)?;
 
         Ok(Function { name, arguments, statements, variables })
     }
 
     fn parse_statement(&mut self, variables: &Vec<&String>) -> Statement {
-        let other = match self.peek() {
-            &Some(Token::Keyword(Keyword::Int))
-            | &Some(Token::Keyword(Keyword::Return)) => false,
-            _ => true
-        };
-
-        let state: Statement = if other {
-            let exp = self.parse_expression(variables);
-            Ok(Statement::Exp(exp))
-        } else {
-            match self.next() {
-                Some(Token::Keyword(Keyword::Int)) => {
-                    let name = match self.next_token() {
-                        Token::Identifier(n) => Ok(n),
-                        other => Err(format!("Expected identifier, found {:?}", other))
-                    }.expect("failed to parse");
-
-                    if let &Some(Token::SemiColon) = self.peek() {
-                        Ok(Statement::Declare(name, None))
-                    } else if let Some(Token::Assign) = self.next() {
-                        let exp = self.parse_expression(variables);
-                        Ok(Statement::Declare(name, Some(exp)))
-                    } else {
-                        Err(format!("Expected SemiColon or Assign"))
-                    }
-                }
-                Some(Token::Keyword(Keyword::Return)) => {
-                    let exp = self.parse_expression(variables);
-                    Ok(Statement::Return(exp))
-                },
-                o => Err(format!("Error, found {:?}", o))
+        let state = match self.next() {
+            Some(Token::Keyword(Keyword::Int)) => self.parse_declare(variables),
+            Some(Token::Keyword(Keyword::Return)) => Ok(Statement::Return(self.parse_expression(variables))),
+            other => {
+                self.push(other);
+                Ok(Statement::Exp(self.parse_expression(variables)))
             }
         }.expect("failed to parse");
 
@@ -186,18 +155,30 @@ impl Parser {
         res
     }
 
-    fn parse_expression(&mut self, variables: &Vec<&String>) -> Expression {
-        match self.peek_2() {
-            (Some(Token::Identifier(name)), Some(Token::Assign)) => {
-                self.drop(2);
-                if variables.contains(&&name) {
-                    let exp = self.parse_expression(variables);
-                    Expression::Assign(name.clone(), Box::new(exp))
-                } else {
-                    panic!("Variable {} not defined", name)
-                }
+    fn parse_declare(&mut self, variables: &Vec<&String>) -> Result<Statement, String> {
+        match (self.next_token(), self.peek()) {
+            (Token::Identifier(name), Some(Token::SemiColon)) => Ok(Statement::Declare(name, None)),
+            (Token::Identifier(name), Some(Token::Assign)) => {
+                self.drop(1);
+                let exp = self.parse_expression(variables);
+                Ok(Statement::Declare(name, Some(exp)))
             },
-            _ => self.parse_or_expression(variables)
+            other => Err(format!("Expected identifier, found {:?}", other))
+        }
+    }
+
+    fn parse_expression(&mut self, variables: &Vec<&String>) -> Expression {
+        match (self.next(), self.next()) {
+            (Some(Token::Identifier(name)), Some(Token::Assign)) => {
+                if !variables.contains(&&name) { panic!("Variable {} not defined", name) }
+                let exp = self.parse_expression(variables);
+                Expression::Assign(name.clone(), Box::new(exp))
+            },
+            (a, b) => {
+                self.push(b);
+                self.push(a);
+                self.parse_or_expression(variables)
+            }
         }
     }
 
@@ -288,15 +269,12 @@ impl Parser {
         match next {
             Some(Token::OpenParen) => {
                 let exp = self.parse_expression(variables);
-                if let Some(Token::CloseParen) = self.next() {
-                    exp
-                } else {
-                    panic!("Must close the paren")
-                }
+                self.match_token(Token::CloseParen).expect("Must close the paren");
+                exp
             },
             Some(Token::Identifier(name)) => {
                 match self.peek() {
-                    &Some(Token::OpenParen) => Expression::FunctionCall(name, self.parse_function_arguments(variables)),
+                    Some(Token::OpenParen) => Expression::FunctionCall(name, self.parse_function_arguments(variables)),
                     _ => Expression::Variable(name)
                 }
             },
@@ -320,32 +298,20 @@ impl Parser {
     fn parse_function_arguments(&mut self, variables: &Vec<&String>) -> Vec<Expression> {
         let mut arguments = vec![];
         self.next();
-        loop {
-            if let &Some(Token::CloseParen) = self.peek() {
+        while let Err(_) = self.peek_token(Token::CloseParen) {
+            let exp = self.parse_expression(variables);
+            arguments.push(exp);
+            if let Some(Token::Comma) = self.peek() {
                 self.next();
-                break
-            } else {
-                let exp = self.parse_expression(variables);
-                arguments.push(exp);
-                if let &Some(Token::CloseParen) = self.peek() {
-                    self.next();
-                    break
-                } else {
-                    if let &Some(Token::Comma) = self.peek() {
-                        self.next();
-                    } else {
-                        panic!("Invalid function call")
-                    }
-                }
             }
         }
-
+        self.next();
         arguments
     }
 
     fn parse_arguments(&mut self) -> Result<Vec<String>, String> {
         let mut arguments = Vec::new();
-        loop {
+        while let Err(_) = self.peek_token(Token::CloseParen) {
             self.match_keyword(Keyword::Int)?;
             let name = self.match_identifier()?;
             if arguments.contains(&name) {
@@ -353,11 +319,8 @@ impl Parser {
             } else {
                 arguments.push(name);
             }
-            match self.peek() {
-                &Some(Token::CloseParen) => break,
-                _ => {
-                    self.match_token(Token::Comma)?;
-                }
+            if let Some(Token::Comma) = self.peek() {
+                self.next();
             }
         }
         Ok(arguments)
@@ -368,18 +331,16 @@ impl Parser {
         let mut term = next(self, variables);
 
         loop {
-            let found = match self.peek() {
-                &Some(ref a) => matching.contains(a),
-                _ => false
-            };
-            if found {
-                let op = self.next().unwrap().into();
-                let next_term = next(self, variables);
-                term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
-            } else {
-                break
+            match self.peek() {
+                Some(ref token) if matching.contains(token) => {
+                    let op = self.next().unwrap().into();
+                    let next_term = next(self, variables);
+                    term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
+                }
+                _ => break
             }
         }
+
         term
     }
 }
