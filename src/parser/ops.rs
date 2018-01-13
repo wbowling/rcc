@@ -60,6 +60,7 @@ pub enum BinOp {
     BitwiseAnd,
     BitwiseXor,
     BitwiseOr,
+    Comma,
 }
 
 impl From<Token> for BinOp {
@@ -83,6 +84,7 @@ impl From<Token> for BinOp {
             Token::BitwiseAnd => BinOp::BitwiseAnd,
             Token::BitwiseXor => BinOp::BitwiseXor,
             Token::BitwiseOr => BinOp::BitwiseOr,
+            Token::Comma => BinOp::Comma,
             other => panic!("Token {:?} cannot be converted into a BinOp", other)
         }
 

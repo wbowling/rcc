@@ -254,6 +254,10 @@ fn gen_expression(exp: Expression, var_map: &HashMap<String, i32>) -> Assembly {
                     asm.add("pop %ecx");
                     asm.add("xorl %ecx, %eax");
                 },
+                BinOp::Comma => {
+                    asm.add(gen_expression(*exp2, var_map));
+                    asm.add(gen_expression(*exp1, var_map));
+                },
             }
         },
         Expression::Variable(name) => {

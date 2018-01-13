@@ -164,49 +164,6 @@ impl Parser {
         }
     }
 
-    fn parse_expression(&mut self, variables: &[&String]) -> Expression {
-        match (self.next(), self.next()) {
-            (Some(Token::Identifier(name)), Some(Token::Assign)) => {
-                self.check_var(variables, &name);
-                let exp = self.parse_expression(variables);
-                Expression::Assign(name.clone(), Box::new(exp))
-            },
-            (Some(Token::Identifier(name)), Some(Token::AssignAdd)) =>
-                self.parse_assign_op(BinOp::Addition, &name, variables),
-            (Some(Token::Identifier(name)), Some(Token::AssignSub)) =>
-                self.parse_assign_op(BinOp::Subtraction, &name, variables),
-            (Some(Token::Identifier(name)), Some(Token::AssignMul)) =>
-                self.parse_assign_op(BinOp::Multiplication, &name, variables),
-            (Some(Token::Identifier(name)), Some(Token::AssignDiv)) =>
-                self.parse_assign_op(BinOp::Division, &name, variables),
-            (Some(Token::Identifier(name)), Some(Token::AssignMod)) =>
-                self.parse_assign_op(BinOp::Modulus, &name, variables),
-            (Some(Token::Identifier(name)), Some(Token::AssignBitLeft)) =>
-                self.parse_assign_op(BinOp::BitwiseLeft, &name, variables),
-            (Some(Token::Identifier(name)), Some(Token::AssignBitRight)) =>
-                self.parse_assign_op(BinOp::BitwiseRight, &name, variables),
-            (Some(Token::Identifier(name)), Some(Token::AssignAnd)) =>
-                self.parse_assign_op(BinOp::BitwiseAnd, &name, variables),
-            (Some(Token::Identifier(name)), Some(Token::AssignOr)) =>
-                self.parse_assign_op(BinOp::BitwiseOr, &name, variables),
-            (Some(Token::Identifier(name)), Some(Token::AssignXor)) =>
-                self.parse_assign_op(BinOp::BitwiseXor, &name, variables),
-//            (Some(Token::Identifier(name)), Some(Token::Increment)) =>
-//                self.parse_inc_op(BinOp::Addition, &name, variables, true),
-//            (Some(Token::Identifier(name)), Some(Token::Decrement)) =>
-//                self.parse_inc_op(BinOp::Subtraction, &name, variables, true),
-//            (Some(Token::Increment), Some(Token::Identifier(name))) =>
-//                self.parse_inc_op(BinOp::Addition, &name, variables, false),
-//            (Some(Token::Decrement), Some(Token::Identifier(name))) =>
-//                self.parse_inc_op(BinOp::Subtraction, &name, variables, false),
-            (a, b) => {
-                self.push(b);
-                self.push(a);
-                self.parse_or_expression(variables)
-            }
-        }
-    }
-
     fn parse_assign_op(&mut self, bin_op: BinOp, name: &str, variables: &[&String]) -> Expression {
         self.check_var(variables, name);
         let exp = Expression::BinOp(
@@ -236,6 +193,54 @@ impl Parser {
     fn check_var(&self, variables: &[&String], name: &str) {
         if !variables.contains(&&name.to_string()) { panic!("Variable {} not defined", name) }
     }
+
+    fn parse_expression(&mut self, variables: &[&String]) -> Expression {
+        self.parse_comma_expression(variables)
+    }
+
+    fn parse_comma_expression(&mut self, variables: &[&String]) -> Expression {
+        self.parse_gen_experssion(
+            &[Token::Comma],
+            variables,
+            &Parser::parse_assignment_expression
+        )
+    }
+
+    fn parse_assignment_expression(&mut self, variables: &[&String]) -> Expression {
+        match (self.next(), self.next()) {
+            (Some(Token::Identifier(name)), Some(Token::Assign)) => {
+                self.check_var(variables, &name);
+                let exp = self.parse_expression(variables);
+                Expression::Assign(name.clone(), Box::new(exp))
+            },
+            (Some(Token::Identifier(name)), Some(Token::AssignAdd)) =>
+                self.parse_assign_op(BinOp::Addition, &name, variables),
+            (Some(Token::Identifier(name)), Some(Token::AssignSub)) =>
+                self.parse_assign_op(BinOp::Subtraction, &name, variables),
+            (Some(Token::Identifier(name)), Some(Token::AssignMul)) =>
+                self.parse_assign_op(BinOp::Multiplication, &name, variables),
+            (Some(Token::Identifier(name)), Some(Token::AssignDiv)) =>
+                self.parse_assign_op(BinOp::Division, &name, variables),
+            (Some(Token::Identifier(name)), Some(Token::AssignMod)) =>
+                self.parse_assign_op(BinOp::Modulus, &name, variables),
+            (Some(Token::Identifier(name)), Some(Token::AssignBitLeft)) =>
+                self.parse_assign_op(BinOp::BitwiseLeft, &name, variables),
+            (Some(Token::Identifier(name)), Some(Token::AssignBitRight)) =>
+                self.parse_assign_op(BinOp::BitwiseRight, &name, variables),
+            (Some(Token::Identifier(name)), Some(Token::AssignAnd)) =>
+                self.parse_assign_op(BinOp::BitwiseAnd, &name, variables),
+            (Some(Token::Identifier(name)), Some(Token::AssignOr)) =>
+                self.parse_assign_op(BinOp::BitwiseOr, &name, variables),
+            (Some(Token::Identifier(name)), Some(Token::AssignXor)) =>
+                self.parse_assign_op(BinOp::BitwiseXor, &name, variables),
+            (a, b) => {
+                self.push(b);
+                self.push(a);
+                self.parse_or_expression(variables)
+            }
+        }
+    }
+
     fn parse_or_expression(&mut self, variables: &[&String]) -> Expression {
         self.parse_gen_experssion(
             &[Token::Or],
@@ -357,7 +362,7 @@ impl Parser {
         let mut arguments = vec![];
         self.next();
         while let Err(_) = self.peek_token(Token::CloseParen) {
-            let exp = self.parse_expression(variables);
+            let exp = self.parse_assignment_expression(variables);
             arguments.push(exp);
             if let Some(Token::Comma) = self.peek() {
                 self.next();
@@ -368,6 +373,7 @@ impl Parser {
     }
 
     fn parse_arguments(&mut self) -> Result<Vec<String>, String> {
+        println!("parse_arguments");
         let mut arguments = Vec::new();
         while let Err(_) = self.peek_token(Token::CloseParen) {
             self.match_keyword(&Keyword::Int)?;
