@@ -23,6 +23,7 @@ pub enum Expression {
     Variable(String),
     VariableRef(String),
     Assign(String, Box<Expression>),
+    AssignPostfix(String, Box<Expression>),
 }
 
 #[derive(Debug, Eq, PartialEq)]

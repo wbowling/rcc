@@ -191,6 +191,14 @@ impl Parser {
                 self.parse_assign_op(BinOp::BitwiseOr, &name, variables),
             (Some(Token::Identifier(name)), Some(Token::AssignXor)) =>
                 self.parse_assign_op(BinOp::BitwiseXor, &name, variables),
+//            (Some(Token::Identifier(name)), Some(Token::Increment)) =>
+//                self.parse_inc_op(BinOp::Addition, &name, variables, true),
+//            (Some(Token::Identifier(name)), Some(Token::Decrement)) =>
+//                self.parse_inc_op(BinOp::Subtraction, &name, variables, true),
+//            (Some(Token::Increment), Some(Token::Identifier(name))) =>
+//                self.parse_inc_op(BinOp::Addition, &name, variables, false),
+//            (Some(Token::Decrement), Some(Token::Identifier(name))) =>
+//                self.parse_inc_op(BinOp::Subtraction, &name, variables, false),
             (a, b) => {
                 self.push(b);
                 self.push(a);
@@ -207,6 +215,22 @@ impl Parser {
             Box::new(self.parse_expression(variables))
         );
         Expression::Assign(name.to_string(), Box::new(exp))
+    }
+
+    fn parse_inc_op(&mut self, bin_op: BinOp, name: &str, variables: &[&String], postfix: bool) -> Expression {
+        self.next();
+        self.check_var(variables, name);
+        let exp = Expression::BinOp(
+            bin_op,
+            Box::new(Expression::Variable(name.to_string())),
+            Box::new(Expression::Int(1))
+        );
+        if postfix {
+            Expression::AssignPostfix(name.to_string(), Box::new(exp))
+        } else {
+            Expression::Assign(name.to_string(), Box::new(exp))
+        }
+
     }
 
     fn check_var(&self, variables: &[&String], name: &str) {
@@ -294,33 +318,38 @@ impl Parser {
     }
 
     fn parse_factor(&mut self, variables: &[&String]) -> Expression {
-        let next = self.next();
-        match next {
-            Some(Token::OpenParen) => {
+        match (self.next(), self.peek()) {
+            (Some(Token::Identifier(name)), Some(Token::Increment)) =>
+                self.parse_inc_op(BinOp::Addition, &name, variables, true),
+            (Some(Token::Identifier(name)), Some(Token::Decrement)) =>
+                self.parse_inc_op(BinOp::Subtraction, &name, variables, true),
+            (Some(Token::Increment), Some(Token::Identifier(name))) =>
+                self.parse_inc_op(BinOp::Addition, &name, variables, false),
+            (Some(Token::Decrement), Some(Token::Identifier(name))) =>
+                self.parse_inc_op(BinOp::Subtraction, &name, variables, false),
+            (Some(Token::OpenParen), _) => {
                 let exp = self.parse_expression(variables);
                 self.match_token(Token::CloseParen).expect("Must close the paren");
                 exp
             },
-            Some(Token::Identifier(name)) => {
+            (Some(Token::Identifier(name)), _) => {
                 match self.peek() {
                     Some(Token::OpenParen) => Expression::FunctionCall(name, self.parse_function_arguments(variables)),
                     _ => Expression::Variable(name)
                 }
             },
-            Some(op @ Token::Negation) | Some(op @ Token::LogicalNeg) | Some(op @ Token::BitComp) => {
+            (Some(op @ Token::Negation), _) | (Some(op @ Token::LogicalNeg), _) | (Some(op @ Token::BitComp), _) => {
                 let factor = self.parse_factor(variables);
                 Expression::UnOp(op.into(), Box::new(factor))
             },
-            Some(Token::Literal(num)) => {
-                Expression::Int(num)
-            },
-            Some(Token::BitwiseAnd) => {
+            (Some(Token::Literal(num)), _) => Expression::Int(num),
+            (Some(Token::BitwiseAnd), _) => {
                 match self.next() {
                     Some(Token::Identifier(name)) => Expression::VariableRef(name),
                     other => panic!("Only variables support &, found token: {:?}", other)
                 }
             },
-            op => panic!("Unknown token: {:?}", op)
+            op => panic!("Unknown token: {:?}", op),
         }
     }
 

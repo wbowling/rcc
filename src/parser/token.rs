@@ -88,4 +88,6 @@ pub enum Token {
     AssignAnd,
     AssignOr,
     AssignXor,
+    Increment,
+    Decrement,
 }

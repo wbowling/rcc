@@ -62,6 +62,8 @@ pub fn lex(contents: &str) -> Vec<Token> {
                     ('&', Some(&'=')) => tokens.push(Token::AssignAnd),
                     ('|', Some(&'=')) => tokens.push(Token::AssignOr),
                     ('^', Some(&'=')) => tokens.push(Token::AssignXor),
+                    ('+', Some(&'+')) => tokens.push(Token::Increment),
+                    ('-', Some(&'-')) => tokens.push(Token::Decrement),
 
                     ('<', _) => tokens.push_back(Token::LessThan),
                     ('>', _) => tokens.push_back(Token::GreaterThan),

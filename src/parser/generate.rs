@@ -275,6 +275,13 @@ fn gen_expression(exp: Expression, var_map: &HashMap<String, i32>) -> Assembly {
             asm.add(gen_expression(*exp, var_map));
             asm.add(format!("movl %eax, {}(%ebp)", var_map.get(&name).expect("Variable not found")));
         },
+        Expression::AssignPostfix(name, exp) => {
+            asm.add(format!("movl {}(%ebp), %eax", var_map.get(&name).expect("Variable not found")));
+            asm.add("push %eax");
+            asm.add(gen_expression(*exp, var_map));
+            asm.add(format!("movl %eax, {}(%ebp)", var_map.get(&name).expect("Variable not found")));
+            asm.add("pop %eax")
+        },
     }
     asm
 }
