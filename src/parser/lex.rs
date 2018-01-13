@@ -30,7 +30,6 @@ pub fn lex(contents: &str) -> Vec<Token> {
             },
             '-' => tokens.push(Token::Negation),
             '~' => tokens.push(Token::BitComp),
-            '+' => tokens.push(Token::Addition),
             '*' => tokens.push(Token::Multiplication),
             '/' => tokens.push(Token::Division),
             '%' => tokens.push(Token::Modulus),
@@ -46,12 +45,14 @@ pub fn lex(contents: &str) -> Vec<Token> {
                     ('!', Some(&'=')) => tokens.push(Token::NotEqual),
                     ('<', Some(&'<')) => tokens.push(Token::BitwiseLeft),
                     ('>', Some(&'>')) => tokens.push(Token::BitwiseRight),
+                    ('+', Some(&'=')) => tokens.push(Token::AssignAdd),
                     ('<', _) => tokens.push_back(Token::LessThan),
                     ('>', _) => tokens.push_back(Token::GreaterThan),
                     ('!', _) => tokens.push_back(Token::LogicalNeg),
                     ('&', _) => tokens.push_back(Token::BitwiseAnd),
                     ('|', _) => tokens.push_back(Token::BitwiseOr),
                     ('=', _) => tokens.push_back(Token::Assign),
+                    ('+', _) => tokens.push_back(Token::Addition),
                     _ => panic!("Unknown token {:?}", multi),
                 }
             }

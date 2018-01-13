@@ -77,5 +77,6 @@ pub enum Token {
     BitwiseXor,
     BitwiseOr,
     Assign,
-    Comma
+    Comma,
+    AssignAdd,
 }

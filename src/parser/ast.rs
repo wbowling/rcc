@@ -169,8 +169,17 @@ impl Parser {
     fn parse_expression(&mut self, variables: &Vec<&String>) -> Expression {
         match (self.next(), self.next()) {
             (Some(Token::Identifier(name)), Some(Token::Assign)) => {
-                if !variables.contains(&&name) { panic!("Variable {} not defined", name) }
+                self.check_var(variables, &name);
                 let exp = self.parse_expression(variables);
+                Expression::Assign(name.clone(), Box::new(exp))
+            },
+            (Some(Token::Identifier(name)), Some(Token::AssignAdd)) => {
+                self.check_var(variables, &name);
+                let exp = Expression::BinOp(
+                    BinOp::Addition,
+                    Box::new(Expression::Variable(name.clone())),
+                    Box::new(self.parse_expression(variables))
+                );
                 Expression::Assign(name.clone(), Box::new(exp))
             },
             (a, b) => {
@@ -181,7 +190,9 @@ impl Parser {
         }
     }
 
-
+    fn check_var(&self, variables: &[&String], name: &String) {
+        if !variables.contains(&&name) { panic!("Variable {} not defined", name) }
+    }
     fn parse_or_expression(&mut self, variables: &Vec<&String>) -> Expression {
         self.parse_gen_experssion(
             &[Token::Or],
