@@ -83,4 +83,9 @@ pub enum Token {
     AssignDiv,
     AssignMul,
     AssignMod,
+    AssignBitLeft,
+    AssignBitRight,
+    AssignAnd,
+    AssignOr,
+    AssignXor,
 }

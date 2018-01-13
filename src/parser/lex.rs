@@ -29,7 +29,6 @@ pub fn lex(contents: &str) -> Vec<Token> {
                 tokens.push_back(Token::Literal(int))
             },
             '~' => tokens.push(Token::BitComp),
-            '^' => tokens.push(Token::BitwiseXor),
             ',' => tokens.push(Token::Comma),
             multi => {
                 match (tokens.next().unwrap(), tokens.peek()) {
@@ -39,13 +38,30 @@ pub fn lex(contents: &str) -> Vec<Token> {
                     ('>', Some(&'=')) => tokens.push(Token::GreaterThanOrEqual),
                     ('=', Some(&'=')) => tokens.push(Token::Equal),
                     ('!', Some(&'=')) => tokens.push(Token::NotEqual),
-                    ('<', Some(&'<')) => tokens.push(Token::BitwiseLeft),
-                    ('>', Some(&'>')) => tokens.push(Token::BitwiseRight),
+                    ('<', Some(&'<')) => {
+                        tokens.next();
+                        if let Some(&'=') = tokens.peek() {
+                            tokens.push(Token::AssignBitLeft)
+                        } else {
+                            tokens.push_back(Token::BitwiseLeft)
+                        }
+                    },
+                    ('>', Some(&'>')) => {
+                        tokens.next();
+                        if let Some(&'=') = tokens.peek() {
+                            tokens.push(Token::AssignBitRight)
+                        } else {
+                            tokens.push_back(Token::BitwiseRight)
+                        }
+                    },
                     ('+', Some(&'=')) => tokens.push(Token::AssignAdd),
                     ('-', Some(&'=')) => tokens.push(Token::AssignSub),
                     ('*', Some(&'=')) => tokens.push(Token::AssignMul),
                     ('/', Some(&'=')) => tokens.push(Token::AssignDiv),
                     ('%', Some(&'=')) => tokens.push(Token::AssignMod),
+                    ('&', Some(&'=')) => tokens.push(Token::AssignAnd),
+                    ('|', Some(&'=')) => tokens.push(Token::AssignOr),
+                    ('^', Some(&'=')) => tokens.push(Token::AssignXor),
 
                     ('<', _) => tokens.push_back(Token::LessThan),
                     ('>', _) => tokens.push_back(Token::GreaterThan),
@@ -58,6 +74,7 @@ pub fn lex(contents: &str) -> Vec<Token> {
                     ('*', _) => tokens.push_back(Token::Multiplication),
                     ('/', _) => tokens.push_back(Token::Division),
                     ('%', _) => tokens.push_back(Token::Modulus),
+                    ('^', _) => tokens.push_back(Token::BitwiseXor),
                     _ => panic!("Unknown token {:?}", multi),
                 }
             }

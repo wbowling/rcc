@@ -181,6 +181,16 @@ impl Parser {
                 self.parse_assign_op(BinOp::Division, &name, variables),
             (Some(Token::Identifier(name)), Some(Token::AssignMod)) =>
                 self.parse_assign_op(BinOp::Modulus, &name, variables),
+            (Some(Token::Identifier(name)), Some(Token::AssignBitLeft)) =>
+                self.parse_assign_op(BinOp::BitwiseLeft, &name, variables),
+            (Some(Token::Identifier(name)), Some(Token::AssignBitRight)) =>
+                self.parse_assign_op(BinOp::BitwiseRight, &name, variables),
+            (Some(Token::Identifier(name)), Some(Token::AssignAnd)) =>
+                self.parse_assign_op(BinOp::BitwiseAnd, &name, variables),
+            (Some(Token::Identifier(name)), Some(Token::AssignOr)) =>
+                self.parse_assign_op(BinOp::BitwiseOr, &name, variables),
+            (Some(Token::Identifier(name)), Some(Token::AssignXor)) =>
+                self.parse_assign_op(BinOp::BitwiseXor, &name, variables),
             (a, b) => {
                 self.push(b);
                 self.push(a);
