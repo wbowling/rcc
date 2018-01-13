@@ -79,4 +79,8 @@ pub enum Token {
     Assign,
     Comma,
     AssignAdd,
+    AssignSub,
+    AssignDiv,
+    AssignMul,
+    AssignMod,
 }
