@@ -77,6 +77,8 @@ pub fn lex(contents: &str) -> Vec<Token> {
                     ('/', _) => tokens.push_back(Token::Division),
                     ('%', _) => tokens.push_back(Token::Modulus),
                     ('^', _) => tokens.push_back(Token::BitwiseXor),
+                    (':', _) => tokens.push_back(Token::Colon),
+                    ('?', _) => tokens.push_back(Token::Question),
                     _ => panic!("Unknown token {:?}", multi),
                 }
             }

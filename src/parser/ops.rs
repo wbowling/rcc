@@ -24,6 +24,7 @@ pub enum Expression {
     VariableRef(String),
     Assign(String, Box<Expression>),
     AssignPostfix(String, Box<Expression>),
+    Ternary(Box<Expression>, Box<Expression>, Box<Expression>),
 }
 
 #[derive(Debug, Eq, PartialEq)]

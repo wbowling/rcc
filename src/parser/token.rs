@@ -90,4 +90,6 @@ pub enum Token {
     AssignXor,
     Increment,
     Decrement,
+    Colon,
+    Question,
 }

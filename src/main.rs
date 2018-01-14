@@ -21,7 +21,8 @@ fn main() {
     let prog = parser.parse();
     println!("{:?}", prog);
 
-    let asm = parser::generate::generate(prog);
+    let mut generator = parser::generate::Generator::new();
+    let asm = generator.generate(prog);
 
 
     let parent = path.parent().expect("can't get parent");

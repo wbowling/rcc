@@ -236,9 +236,28 @@ impl Parser {
             (a, b) => {
                 self.push(b);
                 self.push(a);
-                self.parse_or_expression(variables)
+                self.parse_conditional_expression(variables)
             }
         }
+    }
+
+    fn parse_conditional_expression(&mut self, variables: &[&String]) -> Expression {
+        let mut term = self.parse_or_expression(variables);
+
+        loop {
+            match self.peek() {
+                Some(Token::Question) => {
+                    self.next();
+                    let body = self.parse_expression(variables);
+                    self.match_token(Token::Colon).expect("Expected a Colon");
+                    let else_body = self.parse_expression(variables);
+                    term = Expression::Ternary(Box::new(term), Box::new(body), Box::new(else_body))
+                }
+                _ => break
+            }
+        }
+
+        term
     }
 
     fn parse_or_expression(&mut self, variables: &[&String]) -> Expression {
