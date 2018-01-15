@@ -137,19 +137,50 @@ impl Parser {
     }
 
     fn parse_statement(&mut self, variables: &[&String]) -> Statement {
-        let state = match self.next() {
-            Some(Token::Keyword(Keyword::Int)) => self.parse_declare(variables),
-            Some(Token::Keyword(Keyword::Return)) => Ok(Statement::Return(self.parse_expression(variables))),
-            other => {
-                self.push(other);
-                Ok(Statement::Exp(self.parse_expression(variables)))
-            }
-        }.expect("failed to parse");
+     match self.next() {
+        Some(Token::Keyword(Keyword::Int)) => {
+            let state = self.parse_declare(variables);
+            self.match_token(Token::SemiColon).expect("Need SemiColon");
+            state
+        },
+        Some(Token::Keyword(Keyword::Return)) => {
+            let state = Ok(Statement::Return(self.parse_expression(variables)));
+            self.match_token(Token::SemiColon).expect("Need SemiColon");
+            state
+        },
+        Some(Token::Keyword(Keyword::If)) => self.parse_if_statement(variables),
+        Some(Token::OpenBrace) => self.parse_compond_statement(variables),
+        other => {
+            self.push(other);
+            let state  = Ok(Statement::Exp(self.parse_expression(variables)));
+            self.match_token(Token::SemiColon).expect("Need SemiColon");
+            state
+        }
+     }.expect("failed to parse")
+    }
 
-        match self.next() {
-            Some(Token::SemiColon) => Ok(state),
-            other => Err(format!("Expected SemiColon, found {:?}", other))
-        }.expect("failed to parse")
+
+    fn parse_compond_statement(&mut self, variables: &[&String]) -> Result<Statement, String> {
+        let mut statements  = vec![];
+        while let Err(_) = self.peek_token(Token::CloseBrace) {
+            statements.push(self.parse_statement(variables));
+        }
+        self.drop(1);
+        Ok(Statement::Compound(statements))
+    }
+
+    fn parse_if_statement(&mut self, variables: &[&String]) -> Result<Statement, String> {
+        match self.next_token() {
+            Token::OpenParen => {
+                let condition = self.parse_expression(variables);
+                self.match_token(Token::CloseParen)?;
+                let if_body = self.parse_statement(variables);
+                self.match_token(Token::Keyword(Keyword::Else))?;
+                let else_body = self.parse_statement(variables);
+                Ok(Statement::If(condition, Box::new(if_body), Box::new(else_body)))
+            },
+            other => Err(format!("Expected OpenParen, found {:?}", other))
+        }
     }
 
     fn parse_declare(&mut self, variables: &[&String]) -> Result<Statement, String> {

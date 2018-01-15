@@ -43,7 +43,9 @@ impl<'a> TokenParser<'a> {
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Keyword {
     Int,
-    Return
+    Return,
+    If,
+    Else
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]

@@ -101,6 +101,23 @@ impl Generator {
                 asm.add(format!("movl %eax, {}(%ebp)", var_map.get(&name).expect("Variable not found")));
             },
             Statement::Exp(exp) => asm.add(self.gen_expression(exp, var_map)),
+            Statement::Compound(statements) => {
+                for statement in statements {
+                    asm.add(self.gen_statement(statement, var_map))
+                }
+            },
+            Statement::If(condition, true_body, false_body) => {
+                self.conditional_count += 1;
+                let num = self.conditional_count;
+                asm.add(self.gen_expression(condition, var_map));
+                asm.add("cmpb $0, %al");
+                asm.add(format!("je .FALSE{}", num));
+                asm.add(self.gen_statement(*true_body, var_map));
+                asm.add(format!("jmp .END{}", num));
+                asm.add(format!(".FALSE{}:", num));
+                asm.add(self.gen_statement(*false_body, var_map));
+                asm.add(format!(".END{}:", num));
+            },
             Statement::Declare(_, None) => (),
         }
         asm

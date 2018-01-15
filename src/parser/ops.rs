@@ -31,7 +31,9 @@ pub enum Expression {
 pub enum Statement {
     Declare(String, Option<Expression>),
     Return(Expression),
+    If(Expression, Box<Statement>, Box<Statement>),
     Exp(Expression),
+    Compound(Vec<Statement>)
 }
 
 #[derive(Debug, Eq, PartialEq)]
