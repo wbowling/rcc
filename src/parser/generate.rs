@@ -1,6 +1,11 @@
 use super::ops::*;
 use std::collections::HashMap;
 
+struct StackVariable {
+    size: Size,
+    index: i32,
+}
+
 struct Assembly {
     asm: Vec<String>,
 }
@@ -63,7 +68,7 @@ impl Generator {
         match fun {
             Function { name, arguments, statements, variables } => {
                 let stack_size = variables.len() * 4;
-                let var_map = Generator::get_var_map(arguments, variables);
+                let var_map = Generator::get_var_sizes(&statements, arguments);
 
                 asm.add(format!(".global _{0}", name));
                 asm.add(format!("_{0}:", name));
@@ -86,7 +91,7 @@ impl Generator {
         asm
     }
 
-    fn gen_statement(&mut self, stat: Statement, var_map: &HashMap<String, i32>) -> Assembly {
+    fn gen_statement(&mut self, stat: Statement, var_map: &HashMap<String, StackVariable>) -> Assembly {
         let mut asm = Assembly::new();
 
         match stat {
@@ -96,9 +101,9 @@ impl Generator {
                 asm.add("popl %ebp");
                 asm.add("ret\n");
             }
-            Statement::Declare(name, Some(exp)) => {
+            Statement::Declare(Variable { name, .. }, Some(exp)) => {
                 asm.add(self.gen_expression(exp, var_map));
-                asm.add(format!("movl %eax, {}(%ebp)", var_map.get(&name).expect("Variable not found")));
+                asm.add(self.gen_set_variable(&name, var_map));
             },
             Statement::Exp(exp) => asm.add(self.gen_expression(exp, var_map)),
             Statement::Compound(statements) => {
@@ -125,10 +130,11 @@ impl Generator {
         asm
     }
 
-    fn gen_expression(&mut self, exp: Expression, var_map: &HashMap<String, i32>) -> Assembly {
+    fn gen_expression(&mut self, exp: Expression, var_map: &HashMap<String, StackVariable>) -> Assembly {
         let mut asm = Assembly::new();
         match exp {
             Expression::Int(val) => asm.add(format!("movl ${}, %eax", val)),
+            Expression::Char(val) => asm.add(format!("movb ${}, %al", val)),
             Expression::UnOp(op, exp) => {
                 asm.add(self.gen_expression(*exp, var_map));
                 match op {
@@ -290,10 +296,10 @@ impl Generator {
                 }
             },
             Expression::Variable(name) => {
-                asm.add(format!("movl {}(%ebp), %eax", var_map.get(&name).expect("variable not found")))
+                asm.add(self.gen_get_variable(&name, var_map))
             },
             Expression::VariableRef(name) => {
-                asm.add(format!("leal {}(%ebp), %eax", var_map.get(&name).expect("variable not found")))
+                asm.add(format!("leal {}(%ebp), %eax", var_map.get(&name).expect("variable not found").index))
             },
             Expression::FunctionCall(name, arguments) => {
                 let restore_size = 4 * arguments.len();
@@ -306,13 +312,13 @@ impl Generator {
             },
             Expression::Assign(name, exp) => {
                 asm.add(self.gen_expression(*exp, var_map));
-                asm.add(format!("movl %eax, {}(%ebp)", var_map.get(&name).expect("Variable not found")));
+                asm.add(self.gen_set_variable(&name, var_map));
             },
             Expression::AssignPostfix(name, exp) => {
-                asm.add(format!("movl {}(%ebp), %eax", var_map.get(&name).expect("Variable not found")));
+                asm.add(self.gen_get_variable(&name, var_map));
                 asm.add("push %eax");
                 asm.add(self.gen_expression(*exp, var_map));
-                asm.add(format!("movl %eax, {}(%ebp)", var_map.get(&name).expect("Variable not found")));
+                asm.add(self.gen_set_variable(&name, var_map));
                 asm.add("pop %eax")
             },
             Expression::Ternary(condition, true_body, false_body) => {
@@ -331,20 +337,53 @@ impl Generator {
         asm
     }
 
-    fn get_var_map(arguments: Vec<String>, variables: Vec<String>) -> HashMap<String, i32> {
-        let mut var_map: HashMap<String, i32> = HashMap::new();
+    fn gen_set_variable(&self, name: &String, var_map: &HashMap<String, StackVariable>) -> Assembly {
+        let mut asm = Assembly::new();
+        match var_map.get(name) {
+            Some(&StackVariable { ref size, ref index }) => match size {
+                &Size::Int => asm.add(format!("movl %eax, {}(%ebp)", index)),
+                &Size::Byte => asm.add(format!("movb %al, {}(%ebp)", index)),
+            },
+            None => panic!("Variable {} not found", name)
+        }
+        asm
+    }
 
-        let mut i = 8;
+    fn gen_get_variable(&self, name: &String, var_map: &HashMap<String, StackVariable>) -> Assembly {
+        let mut asm = Assembly::new();
+        match var_map.get(name) {
+            Some(&StackVariable { ref size, ref index }) => match size {
+                &Size::Int => asm.add(format!("movl {}(%ebp), %eax", index)),
+                &Size::Byte => asm.add(format!("movb {}(%ebp), %al", index)),
+            },
+            None => panic!("Variable {} not found", name)
+        }
+        asm
+    }
 
-        for var in arguments {
-            var_map.insert(var, i);
-            i += 4;
+
+    fn get_var_sizes(statements: &Vec<Statement>, arguments: Vec<String>) -> HashMap<String, StackVariable> {
+        let mut var_map: HashMap<String, StackVariable> = HashMap::new();
+
+        let mut i = -4;
+        for statement in statements {
+            match statement {
+                &Statement::Declare(Variable { ref name, ref size }, _) => {
+                    match size {
+                        &Size::Int => var_map.insert(name.clone(), StackVariable { size: Size::Int, index: i }),
+                        &Size::Byte => var_map.insert(name.clone(), StackVariable { size: Size::Byte, index: i }),
+                    };
+                    i -= 4;
+                },
+                _ => (),
+            };
         }
 
-        i = -4;
-        for var in variables {
-            var_map.insert(var, i);
-            i -= 4;
+        i = 8;
+
+        for arg in arguments {
+            var_map.insert(arg, StackVariable { size: Size::Int, index: i });
+            i += 4;
         }
 
         var_map

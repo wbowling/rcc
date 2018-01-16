@@ -43,9 +43,16 @@ impl<'a> TokenParser<'a> {
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Keyword {
     Int,
+    Char,
     Return,
     If,
     Else
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum Value {
+    Int(u32),
+    Char(u8),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -57,7 +64,7 @@ pub enum Token {
     SemiColon,
     Keyword(Keyword),
     Identifier(String),
-    Literal(u32),
+    Literal(Value),
     BitComp,
     LogicalNeg,
     Negation,

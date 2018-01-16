@@ -1,5 +1,17 @@
 use super::token::Token;
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum Size {
+    Int,
+    Byte,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct Variable {
+    pub name: String,
+    pub size: Size,
+}
+
 #[derive(Debug)]
 pub struct Program {
     pub func: Vec<Function>,
@@ -19,6 +31,7 @@ pub enum Expression {
     BinOp(BinOp, Box<Expression>, Box<Expression>),
     UnOp(UnOp, Box<Expression>),
     Int(u32),
+    Char(u8),
     FunctionCall(String, Vec<Expression>),
     Variable(String),
     VariableRef(String),
@@ -29,7 +42,7 @@ pub enum Expression {
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Statement {
-    Declare(String, Option<Expression>),
+    Declare(Variable, Option<Expression>),
     Return(Expression),
     If(Expression, Box<Statement>, Option<Box<Statement>>),
     Exp(Expression),

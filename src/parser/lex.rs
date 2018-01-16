@@ -15,6 +15,7 @@ pub fn lex(contents: &str) -> Vec<Token> {
                 let word: &str = &tokens.get_string(|x| x.is_ascii() && x.is_alphanumeric());
                 match word {
                     "int" =>  tokens.push_back(Token::Keyword(Keyword::Int)),
+                    "char" =>  tokens.push_back(Token::Keyword(Keyword::Char)),
                     "return" => tokens.push_back(Token::Keyword(Keyword::Return)),
                     "if" => tokens.push_back(Token::Keyword(Keyword::If)),
                     "else" => tokens.push_back(Token::Keyword(Keyword::Else)),
@@ -28,10 +29,18 @@ pub fn lex(contents: &str) -> Vec<Token> {
                 } else {
                     word.parse().expect("Not a number")
                 };
-                tokens.push_back(Token::Literal(int))
+                tokens.push_back(Token::Literal(Value::Int(int)))
             },
             '~' => tokens.push(Token::BitComp),
             ',' => tokens.push(Token::Comma),
+            '\'' => {
+                tokens.drop();
+                let c = match (tokens.next(), tokens.peek()) {
+                    (Some(c), Some(&'\'')) => c,
+                    other => panic!("Expected ' but found {:?}", other)
+                };
+                tokens.push(Token::Literal(Value::Char(c as u8)))
+            }
             multi => {
                 match (tokens.next().unwrap(), tokens.peek()) {
                     ('&', Some(&'&')) => tokens.push(Token::And),

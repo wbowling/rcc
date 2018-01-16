@@ -2,6 +2,8 @@ extern crate itertools;
 
 use super::token::Token;
 use super::token::Keyword;
+use super::token::Value;
+
 use super::ops::*;
 
 use std::vec::IntoIter;
@@ -121,7 +123,7 @@ impl Parser {
 
         while let Err(_) = self.peek_token(Token::CloseBrace) {
             let statement = self.parse_statement(&chain(&variables, &arguments).collect::<Vec<&String>>());
-            if let Statement::Declare(ref name, _) = statement {
+            if let Statement::Declare(Variable { ref name, ref size }, _) = statement {
                 if variables.contains(name) || arguments.contains(name) {
                     return Err(format!("Variable alreay defined: {}", name))
                 } else {
@@ -139,10 +141,15 @@ impl Parser {
     fn parse_statement(&mut self, variables: &[&String]) -> Statement {
      match self.next() {
         Some(Token::Keyword(Keyword::Int)) => {
-            let state = self.parse_declare(variables);
+            let state = self.parse_declare(Size::Int, variables);
             self.match_token(Token::SemiColon).expect("Need SemiColon");
             state
         },
+         Some(Token::Keyword(Keyword::Char)) => {
+             let state = self.parse_declare(Size::Byte, variables);
+             self.match_token(Token::SemiColon).expect("Need SemiColon");
+             state
+         },
         Some(Token::Keyword(Keyword::Return)) => {
             let state = Ok(Statement::Return(self.parse_expression(variables)));
             self.match_token(Token::SemiColon).expect("Need SemiColon");
@@ -189,13 +196,13 @@ impl Parser {
         }
     }
 
-    fn parse_declare(&mut self, variables: &[&String]) -> Result<Statement, String> {
+    fn parse_declare(&mut self, size: Size, variables: &[&String]) -> Result<Statement, String> {
         match (self.next_token(), self.peek()) {
-            (Token::Identifier(name), Some(Token::SemiColon)) => Ok(Statement::Declare(name, None)),
+            (Token::Identifier(name), Some(Token::SemiColon)) => Ok(Statement::Declare(Variable { name, size }, None)),
             (Token::Identifier(name), Some(Token::Assign)) => {
                 self.drop(1);
                 let exp = self.parse_expression(variables);
-                Ok(Statement::Declare(name, Some(exp)))
+                Ok(Statement::Declare(Variable { name, size }, Some(exp)))
             },
             other => Err(format!("Expected identifier, found {:?}", other))
         }
@@ -403,7 +410,8 @@ impl Parser {
                 let factor = self.parse_factor(variables);
                 Expression::UnOp(op.into(), Box::new(factor))
             },
-            (Some(Token::Literal(num)), _) => Expression::Int(num),
+            (Some(Token::Literal(Value::Int(num))), _) => Expression::Int(num),
+            (Some(Token::Literal(Value::Char(c))), _) => Expression::Char(c),
             (Some(Token::BitwiseAnd), _) => {
                 match self.next() {
                     Some(Token::Identifier(name)) => Expression::VariableRef(name),
