@@ -175,9 +175,15 @@ impl Parser {
                 let condition = self.parse_expression(variables);
                 self.match_token(Token::CloseParen)?;
                 let if_body = self.parse_statement(variables);
-                self.match_token(Token::Keyword(Keyword::Else))?;
-                let else_body = self.parse_statement(variables);
-                Ok(Statement::If(condition, Box::new(if_body), Box::new(else_body)))
+                match self.peek() {
+                    Some(Token::Keyword(Keyword::Else)) => {
+                        self.drop(1);
+                        let else_body = self.parse_statement(variables);
+                        Ok(Statement::If(condition, Box::new(if_body), Some(Box::new(else_body))))
+                    }
+                    _ => Ok(Statement::If(condition, Box::new(if_body), None))
+                }
+
             },
             other => Err(format!("Expected OpenParen, found {:?}", other))
         }

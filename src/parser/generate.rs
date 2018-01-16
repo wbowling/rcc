@@ -106,7 +106,7 @@ impl Generator {
                     asm.add(self.gen_statement(statement, var_map))
                 }
             },
-            Statement::If(condition, true_body, false_body) => {
+            Statement::If(condition, true_body, false_body_option) => {
                 self.conditional_count += 1;
                 let num = self.conditional_count;
                 asm.add(self.gen_expression(condition, var_map));
@@ -115,7 +115,9 @@ impl Generator {
                 asm.add(self.gen_statement(*true_body, var_map));
                 asm.add(format!("jmp .END{}", num));
                 asm.add(format!(".FALSE{}:", num));
-                asm.add(self.gen_statement(*false_body, var_map));
+                if let Some(false_body) = false_body_option {
+                    asm.add(self.gen_statement(*false_body, var_map));
+                }
                 asm.add(format!(".END{}:", num));
             },
             Statement::Declare(_, None) => (),
