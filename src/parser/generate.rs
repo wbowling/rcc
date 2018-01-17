@@ -66,9 +66,9 @@ impl Generator {
     fn gen_function(&mut self, fun: Function) -> Assembly {
         let mut asm = Assembly::new();
         match fun {
-            Function { name, arguments, statements, variables } => {
-                let stack_size = variables.len() * 4;
-                let var_map = Generator::get_var_sizes(&statements, arguments);
+            Function { name, arguments, statements } => {
+
+                let (var_map, stack_size) = Generator::get_var_sizes(&statements, arguments);
 
                 asm.add(format!(".global _{0}", name));
                 asm.add(format!("_{0}:", name));
@@ -362,18 +362,20 @@ impl Generator {
     }
 
 
-    fn get_var_sizes(statements: &Vec<Statement>, arguments: Vec<String>) -> HashMap<String, StackVariable> {
+    fn get_var_sizes(statements: &Vec<Statement>, arguments: Vec<Variable>) -> (HashMap<String, StackVariable>, u32) {
         let mut var_map: HashMap<String, StackVariable> = HashMap::new();
-
+        let mut stack_size = 0;
         let mut i = -4;
         for statement in statements {
             match statement {
                 &Statement::Declare(Variable { ref name, ref size }, _) => {
+                    Generator::check_var(&var_map, name);
                     match size {
                         &Size::Int => var_map.insert(name.clone(), StackVariable { size: Size::Int, index: i }),
                         &Size::Byte => var_map.insert(name.clone(), StackVariable { size: Size::Byte, index: i }),
                     };
                     i -= 4;
+                    stack_size += 4;
                 },
                 _ => (),
             };
@@ -382,10 +384,21 @@ impl Generator {
         i = 8;
 
         for arg in arguments {
-            var_map.insert(arg, StackVariable { size: Size::Int, index: i });
-            i += 4;
+            match arg {
+                Variable { name, size } => {
+                    Generator::check_var(&var_map, &name);
+                    var_map.insert(name, StackVariable { size: size, index: i });
+                    i += 4;
+                }
+            }
         }
 
-        var_map
+        (var_map, stack_size)
+    }
+
+    fn check_var(var_map: &HashMap<String, StackVariable>, name: &String) {
+        if var_map.get(name).is_some() {
+            panic!("Variable {} already defined", name);
+        }
     }
 }

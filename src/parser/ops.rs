@@ -21,9 +21,8 @@ pub struct Program {
 #[derive(Debug)]
 pub struct Function {
     pub name: String,
-    pub arguments: Vec<String>,
+    pub arguments: Vec<Variable>,
     pub statements: Vec<Statement>,
-    pub variables: Vec<String>
 }
 
 #[derive(Debug, Eq, PartialEq)]

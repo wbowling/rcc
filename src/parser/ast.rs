@@ -1,5 +1,3 @@
-extern crate itertools;
-
 use super::token::Token;
 use super::token::Keyword;
 use super::token::Value;
@@ -8,8 +6,6 @@ use super::ops::*;
 
 use std::vec::IntoIter;
 use std::iter::Peekable;
-
-use itertools::chain;
 
 #[derive(Debug)]
 pub struct Parser {
@@ -110,7 +106,7 @@ impl Parser {
         let name = self.match_identifier()?;
         self.match_token(Token::OpenParen)?;
 
-        let arguments: Vec<String> = match self.peek() {
+        let arguments: Vec<Variable> = match self.peek() {
             Some(Token::CloseParen) => Vec::new(),
             _ => self.parse_arguments().expect("Failed to parse function arguments")
         };
@@ -119,47 +115,39 @@ impl Parser {
         self.match_token(Token::OpenBrace)?;
 
         let mut statements = vec![];
-        let mut variables: Vec<String> = Vec::new();
 
         while let Err(_) = self.peek_token(Token::CloseBrace) {
-            let statement = self.parse_statement(&chain(&variables, &arguments).collect::<Vec<&String>>());
-            if let Statement::Declare(Variable { ref name, ref size }, _) = statement {
-                if variables.contains(name) || arguments.contains(name) {
-                    return Err(format!("Variable alreay defined: {}", name))
-                } else {
-                    variables.push(name.clone());
-                }
-            }
+            let statement = self.parse_statement();
             statements.push(statement);
         }
 
         self.match_token(Token::CloseBrace)?;
 
-        Ok(Function { name, arguments, statements, variables })
+        Ok(Function { name, arguments, statements })
     }
 
-    fn parse_statement(&mut self, variables: &[&String]) -> Statement {
+    fn parse_statement(&mut self) -> Statement {
      match self.next() {
         Some(Token::Keyword(Keyword::Int)) => {
-            let state = self.parse_declare(Size::Int, variables);
+            let state = self.parse_declare(Size::Int);
             self.match_token(Token::SemiColon).expect("Need SemiColon");
             state
         },
          Some(Token::Keyword(Keyword::Char)) => {
-             let state = self.parse_declare(Size::Byte, variables);
+             let state = self.parse_declare(Size::Byte);
              self.match_token(Token::SemiColon).expect("Need SemiColon");
              state
          },
         Some(Token::Keyword(Keyword::Return)) => {
-            let state = Ok(Statement::Return(self.parse_expression(variables)));
+            let state = Ok(Statement::Return(self.parse_expression()));
             self.match_token(Token::SemiColon).expect("Need SemiColon");
             state
         },
-        Some(Token::Keyword(Keyword::If)) => self.parse_if_statement(variables),
-        Some(Token::OpenBrace) => self.parse_compond_statement(variables),
+        Some(Token::Keyword(Keyword::If)) => self.parse_if_statement(),
+        Some(Token::OpenBrace) => self.parse_compond_statement(),
         other => {
             self.push(other);
-            let state  = Ok(Statement::Exp(self.parse_expression(variables)));
+            let state  = Ok(Statement::Exp(self.parse_expression()));
             self.match_token(Token::SemiColon).expect("Need SemiColon");
             state
         }
@@ -167,25 +155,25 @@ impl Parser {
     }
 
 
-    fn parse_compond_statement(&mut self, variables: &[&String]) -> Result<Statement, String> {
+    fn parse_compond_statement(&mut self) -> Result<Statement, String> {
         let mut statements  = vec![];
         while let Err(_) = self.peek_token(Token::CloseBrace) {
-            statements.push(self.parse_statement(variables));
+            statements.push(self.parse_statement());
         }
         self.drop(1);
         Ok(Statement::Compound(statements))
     }
 
-    fn parse_if_statement(&mut self, variables: &[&String]) -> Result<Statement, String> {
+    fn parse_if_statement(&mut self) -> Result<Statement, String> {
         match self.next_token() {
             Token::OpenParen => {
-                let condition = self.parse_expression(variables);
+                let condition = self.parse_expression();
                 self.match_token(Token::CloseParen)?;
-                let if_body = self.parse_statement(variables);
+                let if_body = self.parse_statement();
                 match self.peek() {
                     Some(Token::Keyword(Keyword::Else)) => {
                         self.drop(1);
-                        let else_body = self.parse_statement(variables);
+                        let else_body = self.parse_statement();
                         Ok(Statement::If(condition, Box::new(if_body), Some(Box::new(else_body))))
                     }
                     _ => Ok(Statement::If(condition, Box::new(if_body), None))
@@ -196,31 +184,29 @@ impl Parser {
         }
     }
 
-    fn parse_declare(&mut self, size: Size, variables: &[&String]) -> Result<Statement, String> {
+    fn parse_declare(&mut self, size: Size) -> Result<Statement, String> {
         match (self.next_token(), self.peek()) {
             (Token::Identifier(name), Some(Token::SemiColon)) => Ok(Statement::Declare(Variable { name, size }, None)),
             (Token::Identifier(name), Some(Token::Assign)) => {
                 self.drop(1);
-                let exp = self.parse_expression(variables);
+                let exp = self.parse_expression();
                 Ok(Statement::Declare(Variable { name, size }, Some(exp)))
             },
             other => Err(format!("Expected identifier, found {:?}", other))
         }
     }
 
-    fn parse_assign_op(&mut self, bin_op: BinOp, name: &str, variables: &[&String]) -> Expression {
-        self.check_var(variables, name);
+    fn parse_assign_op(&mut self, bin_op: BinOp, name: &str) -> Expression {
         let exp = Expression::BinOp(
             bin_op,
             Box::new(Expression::Variable(name.to_string())),
-            Box::new(self.parse_expression(variables))
+            Box::new(self.parse_expression())
         );
         Expression::Assign(name.to_string(), Box::new(exp))
     }
 
-    fn parse_inc_op(&mut self, bin_op: BinOp, name: &str, variables: &[&String], postfix: bool) -> Expression {
+    fn parse_inc_op(&mut self, bin_op: BinOp, name: &str, postfix: bool) -> Expression {
         self.next();
-        self.check_var(variables, name);
         let exp = Expression::BinOp(
             bin_op,
             Box::new(Expression::Variable(name.to_string())),
@@ -234,67 +220,61 @@ impl Parser {
 
     }
 
-    fn check_var(&self, variables: &[&String], name: &str) {
-        if !variables.contains(&&name.to_string()) { panic!("Variable {} not defined", name) }
+    fn parse_expression(&mut self) -> Expression {
+        self.parse_comma_expression()
     }
 
-    fn parse_expression(&mut self, variables: &[&String]) -> Expression {
-        self.parse_comma_expression(variables)
-    }
-
-    fn parse_comma_expression(&mut self, variables: &[&String]) -> Expression {
+    fn parse_comma_expression(&mut self) -> Expression {
         self.parse_gen_experssion(
             &[Token::Comma],
-            variables,
             &Parser::parse_assignment_expression
         )
     }
 
-    fn parse_assignment_expression(&mut self, variables: &[&String]) -> Expression {
+    fn parse_assignment_expression(&mut self) -> Expression {
         match (self.next(), self.next()) {
             (Some(Token::Identifier(name)), Some(Token::Assign)) => {
-                self.check_var(variables, &name);
-                let exp = self.parse_expression(variables);
+                let exp = self.parse_expression();
                 Expression::Assign(name.clone(), Box::new(exp))
             },
             (Some(Token::Identifier(name)), Some(Token::AssignAdd)) =>
-                self.parse_assign_op(BinOp::Addition, &name, variables),
+                self.parse_assign_op(BinOp::Addition, &name),
             (Some(Token::Identifier(name)), Some(Token::AssignSub)) =>
-                self.parse_assign_op(BinOp::Subtraction, &name, variables),
+                self.parse_assign_op(BinOp::Subtraction, &name),
             (Some(Token::Identifier(name)), Some(Token::AssignMul)) =>
-                self.parse_assign_op(BinOp::Multiplication, &name, variables),
+                self.parse_assign_op(BinOp::Multiplication, &name),
             (Some(Token::Identifier(name)), Some(Token::AssignDiv)) =>
-                self.parse_assign_op(BinOp::Division, &name, variables),
+                self.parse_assign_op(BinOp::Division, &name),
             (Some(Token::Identifier(name)), Some(Token::AssignMod)) =>
-                self.parse_assign_op(BinOp::Modulus, &name, variables),
+                self.parse_assign_op(BinOp::Modulus, &name),
             (Some(Token::Identifier(name)), Some(Token::AssignBitLeft)) =>
-                self.parse_assign_op(BinOp::BitwiseLeft, &name, variables),
+                self.parse_assign_op(BinOp::BitwiseLeft, &name),
             (Some(Token::Identifier(name)), Some(Token::AssignBitRight)) =>
-                self.parse_assign_op(BinOp::BitwiseRight, &name, variables),
+                self.parse_assign_op(BinOp::BitwiseRight, &name),
             (Some(Token::Identifier(name)), Some(Token::AssignAnd)) =>
-                self.parse_assign_op(BinOp::BitwiseAnd, &name, variables),
+                self.parse_assign_op(BinOp::BitwiseAnd, &name),
             (Some(Token::Identifier(name)), Some(Token::AssignOr)) =>
-                self.parse_assign_op(BinOp::BitwiseOr, &name, variables),
+                self.parse_assign_op(BinOp::BitwiseOr, &name),
             (Some(Token::Identifier(name)), Some(Token::AssignXor)) =>
-                self.parse_assign_op(BinOp::BitwiseXor, &name, variables),
+                self.parse_assign_op(BinOp::BitwiseXor, &name),
             (a, b) => {
                 self.push(b);
                 self.push(a);
-                self.parse_conditional_expression(variables)
+                self.parse_conditional_expression()
             }
         }
     }
 
-    fn parse_conditional_expression(&mut self, variables: &[&String]) -> Expression {
-        let mut term = self.parse_or_expression(variables);
+    fn parse_conditional_expression(&mut self) -> Expression {
+        let mut term = self.parse_or_expression();
 
         loop {
             match self.peek() {
                 Some(Token::Question) => {
                     self.next();
-                    let body = self.parse_expression(variables);
+                    let body = self.parse_expression();
                     self.match_token(Token::Colon).expect("Expected a Colon");
-                    let else_body = self.parse_expression(variables);
+                    let else_body = self.parse_expression();
                     term = Expression::Ternary(Box::new(term), Box::new(body), Box::new(else_body))
                 }
                 _ => break
@@ -304,110 +284,100 @@ impl Parser {
         term
     }
 
-    fn parse_or_expression(&mut self, variables: &[&String]) -> Expression {
+    fn parse_or_expression(&mut self) -> Expression {
         self.parse_gen_experssion(
             &[Token::Or],
-            variables,
              &Parser::parse_logical_and_expression
         )
     }
 
-    fn parse_logical_and_expression(&mut self, variables: &[&String]) -> Expression {
+    fn parse_logical_and_expression(&mut self) -> Expression {
         self.parse_gen_experssion(
             &[Token::And],
-            variables,
             &Parser::parse_bitwise_or_expression
         )
     }
 
-    fn parse_bitwise_or_expression(&mut self, variables: &[&String]) -> Expression {
+    fn parse_bitwise_or_expression(&mut self) -> Expression {
         self.parse_gen_experssion(
             &[Token::BitwiseOr],
-            variables,
             &Parser::parse_bitwise_xor_expression
         )
     }
 
 
-    fn parse_bitwise_xor_expression(&mut self, variables: &[&String]) -> Expression {
+    fn parse_bitwise_xor_expression(&mut self) -> Expression {
         self.parse_gen_experssion(
             &[Token::BitwiseXor],
-            variables,
             &Parser::parse_bitwise_and_expression
         )
     }
 
-    fn parse_bitwise_and_expression(&mut self, variables: &[&String]) -> Expression {
+    fn parse_bitwise_and_expression(&mut self) -> Expression {
         self.parse_gen_experssion(
             &[Token::BitwiseAnd],
-            variables,
             &Parser::parse_equality_expression
         )
     }
 
-    fn parse_equality_expression(&mut self, variables: &[&String]) -> Expression {
+    fn parse_equality_expression(&mut self) -> Expression {
         self.parse_gen_experssion(
             &[Token::Equal, Token::NotEqual],
-            variables,
             &Parser::parse_relational_expression
         )
     }
 
-    fn parse_relational_expression(&mut self, variables: &[&String]) -> Expression {
+    fn parse_relational_expression(&mut self) -> Expression {
         self.parse_gen_experssion(
             &[Token::LessThan, Token::GreaterThan, Token::LessThanOrEqual, Token::GreaterThanOrEqual],
-            variables,
             &Parser::parse_bitshift_expression
         )
     }
 
-    fn parse_bitshift_expression(&mut self, variables: &[&String]) -> Expression {
+    fn parse_bitshift_expression(&mut self) -> Expression {
         self.parse_gen_experssion(
             &[Token::BitwiseLeft, Token::BitwiseRight],
-            variables,
             &Parser::parse_additive_expression
         )
     }
 
-    fn parse_additive_expression(&mut self, variables: &[&String]) -> Expression {
+    fn parse_additive_expression(&mut self) -> Expression {
         self.parse_gen_experssion(
             &[Token::Negation, Token::Addition],
-            variables,
             &Parser::parse_multiplicative_expression
         )
     }
 
-    fn parse_multiplicative_expression(&mut self, variables: &[&String]) -> Expression {
+    fn parse_multiplicative_expression(&mut self) -> Expression {
         self.parse_gen_experssion(
             &[Token::Multiplication, Token::Division, Token::Modulus],
-            variables,
             &Parser::parse_factor
         )
     }
 
-    fn parse_factor(&mut self, variables: &[&String]) -> Expression {
+    fn parse_factor(&mut self) -> Expression {
         match (self.next(), self.peek()) {
             (Some(Token::Identifier(name)), Some(Token::Increment)) =>
-                self.parse_inc_op(BinOp::Addition, &name, variables, true),
+                self.parse_inc_op(BinOp::Addition, &name, true),
             (Some(Token::Identifier(name)), Some(Token::Decrement)) =>
-                self.parse_inc_op(BinOp::Subtraction, &name, variables, true),
+                self.parse_inc_op(BinOp::Subtraction, &name, true),
             (Some(Token::Increment), Some(Token::Identifier(name))) =>
-                self.parse_inc_op(BinOp::Addition, &name, variables, false),
+                self.parse_inc_op(BinOp::Addition, &name, false),
             (Some(Token::Decrement), Some(Token::Identifier(name))) =>
-                self.parse_inc_op(BinOp::Subtraction, &name, variables, false),
+                self.parse_inc_op(BinOp::Subtraction, &name, false),
             (Some(Token::OpenParen), _) => {
-                let exp = self.parse_expression(variables);
+                let exp = self.parse_expression();
                 self.match_token(Token::CloseParen).expect("Must close the paren");
                 exp
             },
             (Some(Token::Identifier(name)), _) => {
                 match self.peek() {
-                    Some(Token::OpenParen) => Expression::FunctionCall(name, self.parse_function_arguments(variables)),
+                    Some(Token::OpenParen) => Expression::FunctionCall(name, self.parse_function_arguments()),
                     _ => Expression::Variable(name)
                 }
             },
             (Some(op @ Token::Negation), _) | (Some(op @ Token::LogicalNeg), _) | (Some(op @ Token::BitComp), _) => {
-                let factor = self.parse_factor(variables);
+                let factor = self.parse_factor();
                 Expression::UnOp(op.into(), Box::new(factor))
             },
             (Some(Token::Literal(Value::Int(num))), _) => Expression::Int(num),
@@ -422,11 +392,11 @@ impl Parser {
         }
     }
 
-    fn parse_function_arguments(&mut self, variables: &[&String]) -> Vec<Expression> {
+    fn parse_function_arguments(&mut self) -> Vec<Expression> {
         let mut arguments = vec![];
         self.next();
         while let Err(_) = self.peek_token(Token::CloseParen) {
-            let exp = self.parse_assignment_expression(variables);
+            let exp = self.parse_assignment_expression();
             arguments.push(exp);
             if let Some(Token::Comma) = self.peek() {
                 self.next();
@@ -436,17 +406,16 @@ impl Parser {
         arguments
     }
 
-    fn parse_arguments(&mut self) -> Result<Vec<String>, String> {
-        println!("parse_arguments");
+    fn parse_arguments(&mut self) -> Result<Vec<Variable>, String> {
         let mut arguments = Vec::new();
         while let Err(_) = self.peek_token(Token::CloseParen) {
-            self.match_keyword(&Keyword::Int)?;
+            let size = match self.next() {
+                Some(Token::Keyword(Keyword::Int)) => Size::Int,
+                Some(Token::Keyword(Keyword::Char)) => Size::Byte,
+                other => panic!("Expected int,char found {:?}", other),
+            };
             let name = self.match_identifier()?;
-            if arguments.contains(&name) {
-                return Err(format!("Argument {} already defined", name))
-            } else {
-                arguments.push(name);
-            }
+            arguments.push(Variable { name, size });
             if let Some(Token::Comma) = self.peek() {
                 self.next();
             }
@@ -454,15 +423,15 @@ impl Parser {
         Ok(arguments)
     }
 
-    fn parse_gen_experssion<F>(&mut self, matching: &[Token], variables: &[&String], next: F) -> Expression
-        where F: Fn(&mut Parser, &[&String]) -> Expression {
-        let mut term = next(self, variables);
+    fn parse_gen_experssion<F>(&mut self, matching: &[Token], next: F) -> Expression
+        where F: Fn(&mut Parser) -> Expression {
+        let mut term = next(self);
 
         loop {
             match self.peek() {
                 Some(ref token) if matching.contains(token) => {
                     let op = self.next().unwrap().into();
-                    let next_term = next(self, variables);
+                    let next_term = next(self);
                     term = Expression::BinOp(op, Box::new(term), Box::new(next_term))
                 }
                 _ => break
