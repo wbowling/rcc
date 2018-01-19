@@ -368,6 +368,12 @@ impl Generator {
         let mut i = -4;
         for statement in statements {
             match statement {
+                &Statement::Exp(Expression::Assign(ref name, _)) |
+                &Statement::Exp(Expression::AssignPostfix(ref name, _)) |
+                &Statement::Exp(Expression::Variable(ref name)) |
+                &Statement::Exp(Expression::VariableRef(ref name)) => {
+                    Generator::check_no_var(&var_map, name)
+                },
                 &Statement::Declare(Variable { ref name, ref size }, _) => {
                     Generator::check_var(&var_map, name);
                     match size {
@@ -399,6 +405,12 @@ impl Generator {
     fn check_var(var_map: &HashMap<String, StackVariable>, name: &String) {
         if var_map.get(name).is_some() {
             panic!("Variable {} already defined", name);
+        }
+    }
+
+    fn check_no_var(var_map: &HashMap<String, StackVariable>, name: &String) {
+        if var_map.get(name).is_none() {
+            panic!("Variable {} already not defined", name);
         }
     }
 }
