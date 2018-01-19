@@ -302,10 +302,13 @@ impl Generator {
                 asm.add(format!("leal {}(%ebp), %eax", var_map.get(&name).expect("variable not found").index))
             },
             Expression::FunctionCall(name, arguments) => {
-                let restore_size = 4 * arguments.len();
-                for exp in arguments.into_iter().rev() {
+                let restore_size = 4 * ((arguments.len() + 4) & !0x03) - 4;
+                asm.add(format!("subl ${}, %esp", restore_size));
+                let mut i = 0;
+                for exp in arguments.into_iter() {
                     asm.add(self.gen_expression(exp, var_map));
-                    asm.add("push %eax");
+                    asm.add(format!("movl %eax, {}(%esp)", i));
+                    i += 4;
                 }
                 asm.add(format!("call _{}", name));
                 asm.add(format!("addl ${}, %esp", restore_size));
@@ -364,8 +367,21 @@ impl Generator {
 
     fn get_var_sizes(statements: &Vec<Statement>, arguments: Vec<Variable>) -> (HashMap<String, StackVariable>, u32) {
         let mut var_map: HashMap<String, StackVariable> = HashMap::new();
+
+        let mut i = 8;
+
+        for arg in arguments {
+            match arg {
+                Variable { name, size } => {
+                    Generator::check_var(&var_map, &name);
+                    var_map.insert(name, StackVariable { size: size, index: i });
+                    i += 4;
+                }
+            }
+        }
+
         let mut stack_size = 0;
-        let mut i = -4;
+        i = -4;
         for statement in statements {
             match statement {
                 &Statement::Exp(Expression::Assign(ref name, _)) |
@@ -381,24 +397,14 @@ impl Generator {
                         &Size::Byte => var_map.insert(name.clone(), StackVariable { size: Size::Byte, index: i }),
                     };
                     i -= 4;
-                    stack_size += 4;
+                    stack_size += 1;
                 },
                 _ => (),
             };
         }
 
-        i = 8;
 
-        for arg in arguments {
-            match arg {
-                Variable { name, size } => {
-                    Generator::check_var(&var_map, &name);
-                    var_map.insert(name, StackVariable { size: size, index: i });
-                    i += 4;
-                }
-            }
-        }
-
+        stack_size = 4 * ((stack_size + 4) & !0x03) - 4;
         (var_map, stack_size)
     }
 
@@ -410,7 +416,7 @@ impl Generator {
 
     fn check_no_var(var_map: &HashMap<String, StackVariable>, name: &String) {
         if var_map.get(name).is_none() {
-            panic!("Variable {} already not defined", name);
+            panic!("Variable {} not defined", name);
         }
     }
 }
