@@ -148,6 +148,17 @@ impl Generator {
                 }
                 asm.add(format!(".END{}:", num));
             },
+            Statement::While(condition, while_body) => {
+                self.conditional_count += 1;
+                let num = self.conditional_count;
+                asm.add(format!(".WHILE_START{}:", num));
+                asm.add(self.gen_expression(condition, var_map));
+                asm.add("cmp al, 0");
+                asm.add(format!("je .WHILE_END{}", num));
+                asm.add(self.gen_statement(*while_body, var_map));
+                asm.add(format!("jmp .WHILE_START{}", num));
+                asm.add(format!(".WHILE_END{}:", num));
+            }
             Statement::Declare(_, None) => (),
         }
         asm

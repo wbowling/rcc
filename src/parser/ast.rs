@@ -144,6 +144,7 @@ impl Parser {
             state
         },
         Some(Token::Keyword(Keyword::If)) => self.parse_if_statement(),
+         Some(Token::Keyword(Keyword::While)) => self.parse_while_statement(),
         Some(Token::OpenBrace) => self.parse_compond_statement(),
         other => {
             self.push(other);
@@ -178,6 +179,18 @@ impl Parser {
                     }
                     _ => Ok(Statement::If(condition, Box::new(if_body), None))
                 }
+
+            },
+            other => Err(format!("Expected OpenParen, found {:?}", other))
+        }
+    }
+
+    fn parse_while_statement(&mut self) -> Result<Statement, String> {
+        match self.next_token() {
+            Token::OpenParen => {
+                let condition = self.parse_expression();
+                self.match_token(Token::CloseParen)?;
+                Ok(Statement::While(condition, Box::new(self.parse_statement())))
 
             },
             other => Err(format!("Expected OpenParen, found {:?}", other))

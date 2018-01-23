@@ -44,6 +44,7 @@ pub enum Statement {
     Declare(Variable, Option<Expression>),
     Return(Expression),
     If(Expression, Box<Statement>, Option<Box<Statement>>),
+    While(Expression, Box<Statement>),
     Exp(Expression),
     Compound(Vec<Statement>)
 }

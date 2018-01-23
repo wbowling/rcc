@@ -19,6 +19,7 @@ pub fn lex(contents: &str) -> Vec<Token> {
                     "return" => tokens.push_back(Token::Keyword(Keyword::Return)),
                     "if" => tokens.push_back(Token::Keyword(Keyword::If)),
                     "else" => tokens.push_back(Token::Keyword(Keyword::Else)),
+                    "while" => tokens.push_back(Token::Keyword(Keyword::While)),
                     _ => tokens.push_back(Token::Identifier(word.to_string()))
                 }
             },
