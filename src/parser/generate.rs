@@ -1,9 +1,8 @@
 use super::ops::*;
 use std::collections::HashMap;
 
-struct StackVariable {
-    size: Size,
-    index: i32,
+enum ProgVariable {
+    StackVariable(Size, i32),
 }
 
 struct Assembly {
@@ -50,6 +49,9 @@ impl Generator {
         let mut asm = Assembly::new();
         match prog {
             Program { func, globals } => {
+                asm.add(".intel_syntax noprefix");
+                asm.add(".text");
+
                 for f in func {
                     asm.add(self.gen_function(f));
                 }
@@ -68,21 +70,22 @@ impl Generator {
         match fun {
             Function { name, arguments, statements } => {
 
-                let (var_map, stack_size) = Generator::get_var_sizes(&statements, arguments);
+                let (var_map, stack_size) = Generator::get_var_sizes(&statements, &arguments);
 
-                asm.add(format!(".global _{0}", name));
-                asm.add(format!("_{0}:", name));
-                asm.add("pushl %ebp");
-                asm.add("movl %esp, %ebp");
-                asm.add(format!("subl ${}, %esp", stack_size));
+                asm.add(format!(".globl _{}", name));
+                asm.add(format!("_{}:", name));
+                asm.add("push rbp");
+                asm.add("mov rbp, rsp");
+                asm.add(format!("sub rsp, {}", stack_size));
+                asm.add(self.gen_func_args(&arguments));
 
                 let mut has_return: bool = statements.iter().any(|s| if let Statement::Return(_) = *s { true } else { false });
                 for statement in statements {
                     asm.add(self.gen_statement(statement, &var_map));
                 }
                 if !has_return {
-                    asm.add("mov	%ebp, %esp");
-                    asm.add("popl %ebp");
+                    asm.add("mov	rsp, rbp");
+                    asm.add("pop rbp");
                     asm.add("ret\n");
                 }
             }
@@ -91,14 +94,34 @@ impl Generator {
         asm
     }
 
-    fn gen_statement(&mut self, stat: Statement, var_map: &HashMap<String, StackVariable>) -> Assembly {
+    fn gen_func_args(&mut self, arguments: &Vec<Variable>) -> Assembly {
+        let mut asm = Assembly::new();
+        let regs = vec!["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+        let mut i: usize = 0;
+        for arg in arguments {
+            if i < 6 {
+                match arg {
+                    &Variable { ref size, .. } => {
+                        match size {
+                            &Size::Int => asm.add(format!("mov DWORD PTR[rbp + {}], {}", (i as i32 + 1) * -8, Generator::reg_dword(regs[i]))),
+                            &Size::Byte => asm.add(format!("mov BYTE PTR[rbp + {}], {}", (i as i32 + 1) * -8, Generator::reg_byte(regs[i]))),
+                        }
+                        i += 1;
+                    }
+                }
+            }
+        }
+        asm
+    }
+
+    fn gen_statement(&mut self, stat: Statement, var_map: &HashMap<String, ProgVariable>) -> Assembly {
         let mut asm = Assembly::new();
 
         match stat {
             Statement::Return(exp) => {
                 asm.add(self.gen_expression(exp, var_map));
-                asm.add("mov	%ebp, %esp");
-                asm.add("popl %ebp");
+                asm.add("mov	rsp, rbp");
+                asm.add("pop rbp");
                 asm.add("ret\n");
             }
             Statement::Declare(Variable { name, .. }, Some(exp)) => {
@@ -115,7 +138,7 @@ impl Generator {
                 self.conditional_count += 1;
                 let num = self.conditional_count;
                 asm.add(self.gen_expression(condition, var_map));
-                asm.add("cmpb $0, %al");
+                asm.add("cmp al, 0");
                 asm.add(format!("je .FALSE{}", num));
                 asm.add(self.gen_statement(*true_body, var_map));
                 asm.add(format!("jmp .END{}", num));
@@ -130,20 +153,20 @@ impl Generator {
         asm
     }
 
-    fn gen_expression(&mut self, exp: Expression, var_map: &HashMap<String, StackVariable>) -> Assembly {
+    fn gen_expression(&mut self, exp: Expression, var_map: &HashMap<String, ProgVariable>) -> Assembly {
         let mut asm = Assembly::new();
         match exp {
-            Expression::Int(val) => asm.add(format!("movl ${}, %eax", val)),
-            Expression::Char(val) => asm.add(format!("movb ${}, %al", val)),
+            Expression::Int(val) => asm.add(format!("mov eax, {}", val)),
+            Expression::Char(val) => asm.add(format!("mov al, {}", val)),
             Expression::UnOp(op, exp) => {
                 asm.add(self.gen_expression(*exp, var_map));
                 match op {
-                    UnOp::Negation => asm.add("neg %eax"),
-                    UnOp::BitComp => asm.add("not %eax"),
+                    UnOp::Negation => asm.add("neg rax"),
+                    UnOp::BitComp => asm.add("not rax"),
                     UnOp::LogicalNeg => asm.add_all(vec![
-                        "cmpl $0, %eax",
-                        "movl $0, %eax",
-                        "sete %al"
+                        "cmp rax, 0",
+                        "mov rax, 0",
+                        "sete al"
                     ]),
                 }
             },
@@ -151,143 +174,143 @@ impl Generator {
                 match op {
                     BinOp::Addition => {
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("addl %ecx, %eax");
+                        asm.add("pop rcx");
+                        asm.add("add rax, rcx");
                     },
                     BinOp::Subtraction => {
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("subl %ecx, %eax");
+                        asm.add("pop rcx");
+                        asm.add("sub rax, rcx");
                     },
                     BinOp::Multiplication => {
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("imul %ecx, %eax");
+                        asm.add("pop rcx");
+                        asm.add("imul rax, rcx");
                     },
                     BinOp::Division => {
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("xor %edx, %edx");
-                        asm.add("idivl %ecx");
+                        asm.add("pop rcx");
+                        asm.add("xor rdx, rdx");
+                        asm.add("idiv rcx");
                     }
                     BinOp::Modulus => {
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("xor %edx, %edx");
-                        asm.add("idivl %ecx");
-                        asm.add("movl %edx, %eax");
+                        asm.add("pop rcx");
+                        asm.add("xor rdx, rdx");
+                        asm.add("idiv rcx");
+                        asm.add("mov rax, rdx");
                     },
                     BinOp::Equal => {
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("cmpl %ecx, %eax");
-                        asm.add("sete %al");
+                        asm.add("pop rcx");
+                        asm.add("cmp rax, rcx");
+                        asm.add("sete al");
                     },
                     BinOp::NotEqual => {
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("cmpl %ecx, %eax");
-                        asm.add("setne %al");
+                        asm.add("pop rcx");
+                        asm.add("cmp rax, rcx");
+                        asm.add("setne al");
                     },
                     BinOp::LessThan => {
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("cmpl %ecx, %eax");
-                        asm.add("setl %al");
+                        asm.add("pop rcx");
+                        asm.add("cmp rax, rcx");
+                        asm.add("setl al");
                     },
                     BinOp::LessThanOrEqual => {
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("cmpl %ecx, %eax");
-                        asm.add("setle %al");
+                        asm.add("pop rcx");
+                        asm.add("cmp rax, rcx");
+                        asm.add("setle al");
                     },
                     BinOp::GreaterThan => {
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("cmpl %ecx, %eax");
-                        asm.add("setg %al");
+                        asm.add("pop rcx");
+                        asm.add("cmp rax, rcx");
+                        asm.add("setg al");
                     },
                     BinOp::GreaterThanOrEqual => {
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("cmpl %ecx, %eax");
-                        asm.add("setge %al");
+                        asm.add("pop rcx");
+                        asm.add("cmp rax, rcx");
+                        asm.add("setge al");
                     },
                     BinOp::Or => {
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("orl %ecx, %eax");
-                        asm.add("setne %al");
+                        asm.add("pop rcx");
+                        asm.add("or rax, rcx");
+                        asm.add("setne al");
                     },
                     BinOp::And => {
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("cmpl $0, %ecx");
-                        asm.add("setne %cl");
-                        asm.add("cmpl $0, %eax");
-                        asm.add("setne %al");
-                        asm.add("andb %cl, %al");
+                        asm.add("pop rcx");
+                        asm.add("cmp rcx, 0");
+                        asm.add("setne cl");
+                        asm.add("cmp rax, 0");
+                        asm.add("setne al");
+                        asm.add("and al, cl");
                     },
                     BinOp::BitwiseLeft => {
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("shll %cl, %eax");
+                        asm.add("pop rcx");
+                        asm.add("shl rax, cl");
                     },
                     BinOp::BitwiseRight => {
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("shrl %cl, %eax");
+                        asm.add("pop rcx");
+                        asm.add("shr rax, cl");
                     },
                     BinOp::BitwiseAnd => {
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("andl %ecx, %eax");
+                        asm.add("pop rcx");
+                        asm.add("and rax, rcx");
                     },
                     BinOp::BitwiseOr => {
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("orl %ecx, %eax");
+                        asm.add("pop rcx");
+                        asm.add("or rax, rcx");
                     },
                     BinOp::BitwiseXor => {
                         asm.add(self.gen_expression(*exp1, var_map));
-                        asm.add("push %eax");
+                        asm.add("push rax");
                         asm.add(self.gen_expression(*exp2, var_map));
-                        asm.add("pop %ecx");
-                        asm.add("xorl %ecx, %eax");
+                        asm.add("pop rcx");
+                        asm.add("xor rax, rcx");
                     },
                     BinOp::Comma => {
                         asm.add(self.gen_expression(*exp2, var_map));
@@ -299,19 +322,39 @@ impl Generator {
                 asm.add(self.gen_get_variable(&name, var_map))
             },
             Expression::VariableRef(name) => {
-                asm.add(format!("leal {}(%ebp), %eax", var_map.get(&name).expect("variable not found").index))
+                match var_map.get(&name) {
+                    Some(&ProgVariable::StackVariable(_, ref index)) => {
+                        asm.add(format!("lea rax, QWORD PTR[rbp + {}]", index));
+                    },
+                    None => panic!("variable not found")
+                }
             },
             Expression::FunctionCall(name, arguments) => {
-                let restore_size = 4 * ((arguments.len() + 4) & !0x03) - 4;
-                asm.add(format!("subl ${}, %esp", restore_size));
+                let extra = arguments.len() as i32 - 6;
+                let regs = vec!["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+
+                if extra > 0 {
+                    let restore_size = 8 * ((extra + 1) & !0x01);
+                    asm.add(format!("sub rsp, {}", restore_size));
+                }
+
                 let mut i = 0;
                 for exp in arguments.into_iter() {
                     asm.add(self.gen_expression(exp, var_map));
-                    asm.add(format!("movl %eax, {}(%esp)", i));
-                    i += 4;
+                    if i > 5 {
+                        asm.add(format!("mov QWORD PTR[rsp + {}], rax", (i - 6)*8));
+                    } else {
+                        asm.add(format!("mov {}, rax", regs[i]));
+                    }
+                    i += 1;
                 }
+
                 asm.add(format!("call _{}", name));
-                asm.add(format!("addl ${}, %esp", restore_size));
+
+                if extra > 0 {
+                    let restore_size = 8 * ((extra + 1) & !0x01);
+                    asm.add(format!("add rsp, {}", restore_size));
+                }
             },
             Expression::Assign(name, exp) => {
                 asm.add(self.gen_expression(*exp, var_map));
@@ -319,16 +362,16 @@ impl Generator {
             },
             Expression::AssignPostfix(name, exp) => {
                 asm.add(self.gen_get_variable(&name, var_map));
-                asm.add("push %eax");
+                asm.add("push rax");
                 asm.add(self.gen_expression(*exp, var_map));
                 asm.add(self.gen_set_variable(&name, var_map));
-                asm.add("pop %eax")
+                asm.add("pop rax")
             },
             Expression::Ternary(condition, true_body, false_body) => {
                 self.conditional_count += 1;
                 let num = self.conditional_count;
                 asm.add(self.gen_expression(*condition, var_map));
-                asm.add("cmpb $0, %al");
+                asm.add("cmp al, 0");
                 asm.add(format!("je .FALSE{}", num));
                 asm.add(self.gen_expression(*true_body, var_map));
                 asm.add(format!("jmp .END{}", num));
@@ -340,48 +383,58 @@ impl Generator {
         asm
     }
 
-    fn gen_set_variable(&self, name: &String, var_map: &HashMap<String, StackVariable>) -> Assembly {
+    fn gen_set_variable(&self, name: &String, var_map: &HashMap<String, ProgVariable>) -> Assembly {
         let mut asm = Assembly::new();
         match var_map.get(name) {
-            Some(&StackVariable { ref size, ref index }) => match size {
-                &Size::Int => asm.add(format!("movl %eax, {}(%ebp)", index)),
-                &Size::Byte => asm.add(format!("movb %al, {}(%ebp)", index)),
+            Some(&ProgVariable::StackVariable(ref size, ref index)) => match size {
+                &Size::Int => asm.add(format!("mov DWORD PTR[rbp + {}], eax", index)),
+                &Size::Byte => asm.add(format!("mov BYTE PTR[rbp + {}], al", index)),
+            }
+            None => panic!("Variable {} not found", name)
+        }
+        asm
+    }
+
+    fn gen_get_variable(&self, name: &String, var_map: &HashMap<String, ProgVariable>) -> Assembly {
+        let mut asm = Assembly::new();
+        match var_map.get(name) {
+            Some(&ProgVariable::StackVariable(ref size, ref index)) => match size {
+                &Size::Int => asm.add(format!("mov eax, DWORD PTR[rbp + {}]", index)),
+                &Size::Byte => asm.add(format!("mov al, BYTE PTR[rbp + {}]", index)),
             },
             None => panic!("Variable {} not found", name)
         }
         asm
     }
 
-    fn gen_get_variable(&self, name: &String, var_map: &HashMap<String, StackVariable>) -> Assembly {
-        let mut asm = Assembly::new();
-        match var_map.get(name) {
-            Some(&StackVariable { ref size, ref index }) => match size {
-                &Size::Int => asm.add(format!("movl {}(%ebp), %eax", index)),
-                &Size::Byte => asm.add(format!("movb {}(%ebp), %al", index)),
-            },
-            None => panic!("Variable {} not found", name)
-        }
-        asm
-    }
 
+    fn get_var_sizes(statements: &Vec<Statement>, arguments: &Vec<Variable>) -> (HashMap<String, ProgVariable>, u32) {
+        let mut var_map: HashMap<String, ProgVariable> = HashMap::new();
 
-    fn get_var_sizes(statements: &Vec<Statement>, arguments: Vec<Variable>) -> (HashMap<String, StackVariable>, u32) {
-        let mut var_map: HashMap<String, StackVariable> = HashMap::new();
-
-        let mut i = 8;
+        let mut r = 0;
+        let mut stack_size = 0;
+        let mut i = -8;
 
         for arg in arguments {
             match arg {
-                Variable { name, size } => {
+                &Variable { ref name, ref size } => {
                     Generator::check_var(&var_map, &name);
-                    var_map.insert(name, StackVariable { size: size, index: i });
-                    i += 4;
+                    let s = match size {
+                        &Size::Int => Size::Int,
+                        &Size::Byte => Size::Byte
+                    };
+                    if r > 5 {
+                        var_map.insert(name.clone(), ProgVariable::StackVariable(s, (r-4)*8));
+                    } else {
+                        var_map.insert(name.clone(), ProgVariable::StackVariable(s, i));
+                        i -= 8;
+                        stack_size += 1;
+                    }
+                    r += 1;
                 }
             }
         }
 
-        let mut stack_size = 0;
-        i = -4;
         for statement in statements {
             match statement {
                 &Statement::Exp(Expression::Assign(ref name, _)) |
@@ -393,10 +446,10 @@ impl Generator {
                 &Statement::Declare(Variable { ref name, ref size }, _) => {
                     Generator::check_var(&var_map, name);
                     match size {
-                        &Size::Int => var_map.insert(name.clone(), StackVariable { size: Size::Int, index: i }),
-                        &Size::Byte => var_map.insert(name.clone(), StackVariable { size: Size::Byte, index: i }),
+                        &Size::Int => var_map.insert(name.clone(), ProgVariable::StackVariable(Size::Int,i)),
+                        &Size::Byte => var_map.insert(name.clone(), ProgVariable::StackVariable(Size::Byte,i)),
                     };
-                    i -= 4;
+                    i -= 8;
                     stack_size += 1;
                 },
                 _ => (),
@@ -404,19 +457,43 @@ impl Generator {
         }
 
 
-        stack_size = 4 * ((stack_size + 4) & !0x03) - 4;
+        stack_size = 8 * ((stack_size + 1) & !0x01);
         (var_map, stack_size)
     }
 
-    fn check_var(var_map: &HashMap<String, StackVariable>, name: &String) {
+    fn check_var(var_map: &HashMap<String, ProgVariable>, name: &String) {
         if var_map.get(name).is_some() {
             panic!("Variable {} already defined", name);
         }
     }
 
-    fn check_no_var(var_map: &HashMap<String, StackVariable>, name: &String) {
+    fn check_no_var(var_map: &HashMap<String, ProgVariable>, name: &String) {
         if var_map.get(name).is_none() {
             panic!("Variable {} not defined", name);
+        }
+    }
+
+    fn reg_dword(reg: &str) -> &str {
+        match reg {
+            "rdi" => "edi",
+            "rsi" => "esi",
+            "rdx" => "edx",
+            "rcx" => "ecx",
+            "r8" => "r8d",
+            "r9" => "r9d",
+            other => panic!("err convertion reg {}", other),
+        }
+    }
+
+    fn reg_byte(reg: &str) -> &str {
+        match reg {
+            "rdi" => "dil",
+            "rsi" => "sil",
+            "rdx" => "dl",
+            "rcx" => "cl",
+            "r8" => "r8b",
+            "r9" => "r9b",
+            other => panic!("err convertion reg {}", other),
         }
     }
 }

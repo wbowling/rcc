@@ -51,7 +51,7 @@ fn compile(path: &PathBuf) {
     dest.set_file_name(path.file_stem().expect("cant get basename"));
 
     let output = Command::new("gcc")
-        .arg("-m32")
+        .arg("-masm=intel")
         .arg(path)
         .arg("-Wl,-no_pie")
         .arg("-o")
